@@ -137,8 +137,8 @@ def stream(
     disable_light=False,
     lsl_time=False,
     retries=1,
-    log_level=logging.ERROR
-):
+    log_level=logging.ERROR):
+    
     # If no data types are enabled, we warn the user and return immediately.
     if eeg_disabled and not ppg_enabled and not acc_enabled and not gyro_enabled:
         print('Stream initiation failed: At least one data source must be enabled.')
