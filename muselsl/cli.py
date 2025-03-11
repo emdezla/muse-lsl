@@ -16,7 +16,7 @@ class CLI:
             "--backend",
             dest="backend",
             type=str,
-            default="auto",
+            default="gatt",
             help="BLE backend to use. Can be auto, bluemuse, gatt or bgapi.")
         parser.add_argument(
             "-i",
