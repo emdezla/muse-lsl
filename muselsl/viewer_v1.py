@@ -115,9 +115,9 @@ class LSLViewer():
             self.axes.set_yticklabels(ticks_labels)
             
         elif self.data_source == "PPG":
-            # For PPG, simplified plot with fewer points for better performance
+            # For PPG, extremely simplified plot
             self.data = np.zeros((self.n_samples, self.n_chan))
-            self.subsample = max(self.subsample, 8)  # Increase subsample to reduce points
+            self.subsample = max(self.subsample, 16)  # Increase subsample even more to reduce points
             
             # Use different colors for each channel
             colors = ['r', 'g', 'b']
@@ -134,9 +134,9 @@ class LSLViewer():
             self.axes.set_ylim(0, 4000)
             
         elif self.data_source in ["ACC", "GYRO"]:
-            # For ACC and GYRO, simplified plot with fewer points for better performance
+            # For ACC and GYRO, extremely simplified plot
             self.data = np.zeros((self.n_samples, 3))  # X, Y, Z
-            self.subsample = max(self.subsample, 8)  # Increase subsample to reduce points
+            self.subsample = max(self.subsample, 16)  # Increase subsample even more to reduce points
             
             # Labels for axes
             axis_labels = ['X', 'Y', 'Z']
@@ -219,19 +219,12 @@ class LSLViewer():
                         
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
                         if len(samples) > 0:
-                            # Handle different possible shapes of incoming data
+                            # Simple reshape to ensure we have a 2D array with 3 columns
                             if samples.ndim == 1:
-                                # Single sample case
                                 reshaped_samples = samples.reshape(1, -1)
-                            elif samples.ndim == 2 and samples.shape[1] == 3:
-                                # Normal case: multiple samples with x,y,z values
-                                reshaped_samples = samples
-                            elif samples.ndim == 3:
-                                # Handle case where samples might be 3D
-                                reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
                             else:
-                                # Try to make it work anyway
-                                reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
+                                # Just take the first 3 columns if there are more
+                                reshaped_samples = np.array(samples)[:, :3]
                             
                             # Append new data and keep only the last n_samples
                             self.data = np.vstack([self.data, reshaped_samples])
@@ -240,17 +233,13 @@ class LSLViewer():
                             # No filtering for ACC/GYRO data
                             plot_data = self.data
                             
-                            # Update plot less frequently to reduce lag
+                            # Simplified update - just update the lines directly
                             k += 1
-                            if k >= 3:  # Only update every 3 samples
-                                # Update each axis line
+                            if k >= 5:  # Update even less frequently (every 5 samples)
+                                # Direct update of each axis line with raw data
                                 for ii in range(3):
-                                    # Get current data for this axis
-                                    current_data = plot_data[::self.subsample, ii]
-                                    
-                                    # Update line data
                                     self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(current_data)
+                                    self.lines[ii].set_ydata(self.data[::self.subsample, ii])
                                 
                                 # Force redraw
                                 self.fig.canvas.draw()
@@ -275,28 +264,20 @@ class LSLViewer():
                         if len(samples) > 0:
                             # No debug prints to improve performance
                             
-                            # Make sure samples are properly shaped
+                            # Simple reshape to ensure we have a 2D array
                             if samples.ndim == 1:
-                                # Single sample case
                                 samples = samples.reshape(1, -1)
                             
                             self.data = np.vstack([self.data, samples])
                             self.data = self.data[-self.n_samples:]
-                        
-                            # No filtering for PPG data
-                            plot_data = self.data
                             
-                            # Update plot less frequently to reduce lag
+                            # Simplified update - just update the lines directly
                             k += 1
-                            if k >= 3:  # Only update every 3 samples
-                                # Update each PPG channel
+                            if k >= 5:  # Update even less frequently (every 5 samples)
+                                # Direct update with raw data
                                 for ii in range(min(3, self.n_chan)):
-                                    # Get current data for this channel
-                                    current_data = plot_data[::self.subsample, ii]
-                                    
-                                    # Update line data
                                     self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(current_data)
+                                    self.lines[ii].set_ydata(self.data[::self.subsample, ii])
                                 
                                 # Use fixed y-axis limits for PPG data
                                 self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
