@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from scipy.signal import lfilter, lfilter_zi, firwin
-from time import sleep, time
+from time import sleep
 from pylsl import StreamInlet, resolve_byprop
 import seaborn as sns
 from threading import Thread, Lock
@@ -19,17 +19,6 @@ def view(window, scale, refresh, figure, backend, data_source="EEG"):
 
     if len(streams) == 0:
         raise(RuntimeError(f"Can't find {data_source} stream."))
-    print(f"Found {len(streams)} {data_source} stream(s).")
-    
-    # Print detailed stream info
-    for i, stream in enumerate(streams):
-        print(f"Stream {i+1} details:")
-        print(f"  Name: {stream.name()}")
-        print(f"  Type: {stream.type()}")
-        print(f"  Channel count: {stream.channel_count()}")
-        print(f"  Sampling rate: {stream.nominal_srate()}")
-        print(f"  Source ID: {stream.source_id()}")
-    
     print("Start acquiring data.")
 
     # Create the viewer with the stream
@@ -112,9 +101,6 @@ class LSLViewer():
 
     def update_buffer(self):
         """Update buffer with new data from the inlet"""
-        last_warning_time = 0
-        empty_count = 0
-        
         try:
             while self.started:
                 # Get data from inlet
@@ -164,10 +150,6 @@ class LSLViewer():
                                 # Move buffer index
                                 self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
                 else:
-                    # No data received
-                    empty_count += 1
-                
-                if not timestamps or len(timestamps) == 0:
                     # No data received, sleep a bit
                     sleep(0.1)
         except Exception as e:
@@ -249,10 +231,7 @@ class LSLViewer():
                 elif self.data_source == "GYRO":
                     axs[i].set_ylim(-250, 250)
                 elif self.data_source == "PPG":
-                    # More flexible y-limits for PPG to accommodate different value ranges
-                    axs[i].set_ylim(0, 10000)  # Increased upper limit
-                    # Add grid for better visibility
-                    axs[i].grid(True, which='both', linestyle='--', linewidth=0.5)
+                    axs[i].set_ylim(0, 4000)
             
             # Set fixed x-axis limits
             for ax in axs:
@@ -271,17 +250,6 @@ class LSLViewer():
                 t = np.roll(self.time_buffer, -idx)
                 d = np.roll(self.data_buffer, -idx, axis=1)
             
-            # Debug data buffer state
-            if self.data_source == "PPG" and np.count_nonzero(d) == 0:
-                # Insert test data to verify plotting works
-                test_indices = np.arange(min(100, d.shape[1]))
-                for ch in range(d.shape[0]):
-                    # Create sine wave test pattern with different phases per channel
-                    d[ch, test_indices] = 1000 * np.sin(0.1 * test_indices + ch * np.pi/3) + 2000
-                # Also insert fake timestamps
-                current_time = time()
-                t[test_indices] = current_time - np.flip(0.01 * test_indices)
-            
             # Filter data for the time window
             if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
                 last_timestamp = t[-1]
@@ -290,17 +258,14 @@ class LSLViewer():
                 if np.sum(mask) > 0:
                     t_plot = t[mask]
                     d_plot = d[:, mask]
-                    # No debug output for PPG
                 else:
                     # If no data in time window yet, use all available non-zero data
                     non_zero_mask = t != 0
                     t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
                     d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((channels, 1))
-                    # No debug output for PPG
             else:
                 t_plot = np.array([0])
                 d_plot = np.zeros((channels, 1))
-                # No debug output for PPG
 
             # Normalize time to show seconds from current time
             if len(t_plot) > 0 and t_plot[-1] != 0:
