@@ -159,62 +159,86 @@ class LSLViewer():
         """
         Displays live plots for the chosen stream using matplotlib's FuncAnimation.
         """
-        # For all data types, use subplots for each channel
+        # Different plot setup based on data type
         if self.data_source == "EEG":
-            channels = self.n_chan
-        elif self.data_source in ["ACC", "GYRO"]:
-            channels = 3  # X, Y, Z
-        elif self.data_source == "PPG":
-            channels = min(3, self.n_chan)  # Up to 3 PPG channels
-        else:
-            channels = self.n_chan
-        
-        fig, axs = plt.subplots(channels, 1, figsize=(10, 8), sharex=True)
-        # Ensure axs is always a list/array for consistent indexing
-        if channels == 1:
-            axs = [axs]
-
-        # Create line objects for blitting
-        lines = []
-        
-        # Set fixed x-axis limits for time window
-        time_window = self.window  # Show only the last N seconds
-        
-        # Set channel labels based on the selected stream
-        if self.data_source == "EEG":
-            labels = self.ch_names
-        elif self.data_source == "ACC":
-            labels = ["Acc X", "Acc Y", "Acc Z"]
-        elif self.data_source == "GYRO":
-            labels = ["Gyr X", "Gyr Y", "Gyr Z"]
-        elif self.data_source == "PPG":
-            labels = ["PPG IR", "PPG Red", "PPG Green"][:channels]
-        else:
-            labels = [f"Ch {i+1}" for i in range(channels)]
-        
-        # Initialize lines
-        for i, lbl in enumerate(labels[:channels]):
-            line, = axs[i].plot([], [], label=lbl)
-            lines.append(line)
-            axs[i].set_ylabel(lbl)
-            axs[i].grid(True)
+            # Special case for EEG - use single plot with stacked channels
+            fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+            lines = []
             
-            # Set fixed y-axis limits based on data type
-            if self.data_source == "EEG":
-                axs[i].set_ylim(-self.scale, self.scale)
-            elif self.data_source == "ACC":
-                axs[i].set_ylim(-2, 2)
-            elif self.data_source == "GYRO":
-                axs[i].set_ylim(-250, 250)
+            # Create a line for each EEG channel
+            for ii in range(self.n_chan):
+                line, = ax.plot([], [], lw=1)
+                lines.append(line)
+            
+            # Set up EEG plot
+            ax.set_ylim(-self.n_chan + 0.5, 0.5)
+            ticks = np.arange(0, -self.n_chan, -1)
+            ax.set_yticks(ticks)
+            
+            # Initialize with empty labels
+            ticks_labels = [f"{self.ch_names[ii]}" for ii in range(self.n_chan)]
+            ax.set_yticklabels(ticks_labels)
+            
+            ax.set_xlabel('Time (s)')
+            ax.set_xlim(-self.window, 0.1)
+            ax.xaxis.grid(False)
+            fig.suptitle(f"EEG Data")
+            
+            # Single axis for EEG
+            axs = [ax]
+            channels = self.n_chan
+            
+        else:
+            # For ACC, GYRO, PPG use subplots for each channel
+            if self.data_source in ["ACC", "GYRO"]:
+                channels = 3  # X, Y, Z
             elif self.data_source == "PPG":
-                axs[i].set_ylim(0, 4000)
-        
-        # Set fixed x-axis limits
-        for ax in axs:
-            ax.set_xlim(-time_window, 0.1)
-        
-        axs[-1].set_xlabel('Time (s)')
-        fig.suptitle(f"{self.data_source} (last {time_window}s)")
+                channels = min(3, self.n_chan)  # Up to 3 PPG channels
+            else:
+                channels = self.n_chan
+            
+            fig, axs = plt.subplots(channels, 1, figsize=(10, 8), sharex=True)
+            # Ensure axs is always a list/array for consistent indexing
+            if channels == 1:
+                axs = [axs]
+
+            # Create line objects for blitting
+            lines = []
+            
+            # Set fixed x-axis limits for time window
+            time_window = self.window  # Show only the last N seconds
+            
+            # Set channel labels based on the selected stream
+            if self.data_source == "ACC":
+                labels = ["Acc X", "Acc Y", "Acc Z"]
+            elif self.data_source == "GYRO":
+                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
+            elif self.data_source == "PPG":
+                labels = ["PPG IR", "PPG Red", "PPG Green"][:channels]
+            else:
+                labels = [f"Ch {i+1}" for i in range(channels)]
+            
+            # Initialize lines
+            for i, lbl in enumerate(labels[:channels]):
+                line, = axs[i].plot([], [], label=lbl)
+                lines.append(line)
+                axs[i].set_ylabel(lbl)
+                axs[i].grid(True)
+                
+                # Set fixed y-axis limits based on data type
+                if self.data_source == "ACC":
+                    axs[i].set_ylim(-2, 2)
+                elif self.data_source == "GYRO":
+                    axs[i].set_ylim(-250, 250)
+                elif self.data_source == "PPG":
+                    axs[i].set_ylim(0, 4000)
+            
+            # Set fixed x-axis limits
+            for ax in axs:
+                ax.set_xlim(-time_window, 0.1)
+            
+            axs[-1].set_xlabel('Time (s)')
+            fig.suptitle(f"{self.data_source} (last {time_window}s)")
         
         # Connect key press events
         fig.canvas.mpl_connect('key_press_event', self.on_key_press)
@@ -229,7 +253,7 @@ class LSLViewer():
             # Filter data for the time window
             if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
                 last_timestamp = t[-1]
-                mask = t >= (last_timestamp - time_window)
+                mask = t >= (last_timestamp - self.window)
                 # Ensure we have at least some data points even if time window is not filled yet
                 if np.sum(mask) > 0:
                     t_plot = t[mask]
@@ -249,10 +273,24 @@ class LSLViewer():
             else:
                 t_normalized = np.array([0])
             
-            # Update line data
-            for i, line in enumerate(lines):
-                if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
-                    line.set_data(t_normalized, d_plot[i])
+            # Update line data based on data source
+            if self.data_source == "EEG":
+                # Special handling for EEG - stacked channels
+                for ii in range(self.n_chan):
+                    if ii < d_plot.shape[0]:
+                        lines[ii].set_data(t_normalized, d_plot[ii] / self.scale - ii)
+                
+                # Update impedance values in y-axis labels
+                if len(d_plot) > 0 and d_plot.shape[1] > 0:
+                    impedances = np.std(d_plot, axis=1)
+                    ticks_labels = ['%s - %.2f' % (self.ch_names[ii], impedances[ii])
+                                    for ii in range(self.n_chan)]
+                    axs[0].set_yticklabels(ticks_labels)
+            else:
+                # Normal handling for other data types
+                for i, line in enumerate(lines):
+                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
+                        line.set_data(t_normalized, d_plot[i])
             
             return lines
 
