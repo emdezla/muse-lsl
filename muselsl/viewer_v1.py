@@ -115,8 +115,9 @@ class LSLViewer():
             self.axes.set_yticklabels(ticks_labels)
             
         elif self.data_source == "PPG":
-            # For PPG, we have 3 channels
+            # For PPG, simplified plot with fewer points for better performance
             self.data = np.zeros((self.n_samples, self.n_chan))
+            self.subsample = max(self.subsample, 8)  # Increase subsample to reduce points
             
             # Use different colors for each channel
             colors = ['r', 'g', 'b']
@@ -133,8 +134,9 @@ class LSLViewer():
             self.axes.set_ylim(0, 4000)
             
         elif self.data_source in ["ACC", "GYRO"]:
-            # For ACC and GYRO, we have 3 axes (X, Y, Z)
+            # For ACC and GYRO, simplified plot with fewer points for better performance
             self.data = np.zeros((self.n_samples, 3))  # X, Y, Z
+            self.subsample = max(self.subsample, 8)  # Increase subsample to reduce points
             
             # Labels for axes
             axis_labels = ['X', 'Y', 'Z']
@@ -197,11 +199,7 @@ class LSLViewer():
                     # Ensure timestamps is a 1D array
                     timestamps = np.atleast_1d(np.array(timestamps).flatten())
                     
-                    # Debug print for incoming data
-                    print(f"Received {len(timestamps)} samples for {self.data_source}")
-                    if len(samples) > 0:
-                        print(f"Sample shape: {np.array(samples).shape}")
-                        print(f"First sample: {samples[0]}")
+                    # No debug prints to improve performance
 
                     if self.dejitter:
                         #timestamps = np.float64(np.arange(len(timestamps)))
@@ -221,8 +219,6 @@ class LSLViewer():
                         
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
                         if len(samples) > 0:
-                            print(f"Processing {len(samples)} {self.data_source} samples")
-                            
                             # Handle different possible shapes of incoming data
                             if samples.ndim == 1:
                                 # Single sample case
@@ -234,12 +230,8 @@ class LSLViewer():
                                 # Handle case where samples might be 3D
                                 reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
                             else:
-                                print(f"WARNING: Unexpected {self.data_source} data shape: {samples.shape}")
                                 # Try to make it work anyway
                                 reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
-                            
-                            print(f"Reshaped to: {reshaped_samples.shape}")
-                            print(f"Sample values: {reshaped_samples[0]}")
                             
                             # Append new data and keep only the last n_samples
                             self.data = np.vstack([self.data, reshaped_samples])
@@ -248,21 +240,22 @@ class LSLViewer():
                             # No filtering for ACC/GYRO data
                             plot_data = self.data
                             
-                            # Force update every time for better responsiveness
-                            print(f"Updating {self.data_source} plot with {len(plot_data)} samples")
-                            
-                            # Update each axis line
-                            for ii in range(3):
-                                # Get current data for this axis
-                                current_data = plot_data[::self.subsample, ii]
+                            # Update plot less frequently to reduce lag
+                            k += 1
+                            if k >= 3:  # Only update every 3 samples
+                                # Update each axis line
+                                for ii in range(3):
+                                    # Get current data for this axis
+                                    current_data = plot_data[::self.subsample, ii]
+                                    
+                                    # Update line data
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                    self.lines[ii].set_ydata(current_data)
                                 
-                                # Update line data
-                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                self.lines[ii].set_ydata(current_data)
-                                
-                                # Print some values for debugging
-                                if len(current_data) > 0:
-                                    print(f"{self.data_source} Axis {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
+                                # Force redraw
+                                self.fig.canvas.draw()
+                                self.fig.canvas.flush_events()
+                                k = 0
                             
                             # Use fixed y-axis limits for ACC data
                             if self.data_source == "ACC":
@@ -272,9 +265,7 @@ class LSLViewer():
                             
                             self.axes.set_xlim(-self.window, 0)
                             
-                            # Force redraw
-                            self.fig.canvas.draw()
-                            self.fig.canvas.flush_events()
+                            # Redraw is now handled in the conditional block above
                     
                     elif self.data_source == "PPG":
                         # Convert samples to numpy array if it's not already
@@ -282,8 +273,7 @@ class LSLViewer():
                         
                         # For PPG, we have regular samples
                         if len(samples) > 0:
-                            print(f"Processing {len(samples)} PPG samples with shape {samples.shape}")
-                            print(f"First PPG sample: {samples[0]}")
+                            # No debug prints to improve performance
                             
                             # Make sure samples are properly shaped
                             if samples.ndim == 1:
@@ -296,29 +286,26 @@ class LSLViewer():
                             # No filtering for PPG data
                             plot_data = self.data
                             
-                            print(f"Updating PPG plot with {len(plot_data)} samples")
-                            
-                            # Update each PPG channel
-                            for ii in range(min(3, self.n_chan)):
-                                # Get current data for this channel
-                                current_data = plot_data[::self.subsample, ii]
+                            # Update plot less frequently to reduce lag
+                            k += 1
+                            if k >= 3:  # Only update every 3 samples
+                                # Update each PPG channel
+                                for ii in range(min(3, self.n_chan)):
+                                    # Get current data for this channel
+                                    current_data = plot_data[::self.subsample, ii]
                                     
-                                # Print some values for debugging
-                                if len(current_data) > 0:
-                                    print(f"PPG Channel {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
-                                    
-                                # Update line data
-                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                self.lines[ii].set_ydata(current_data)
-                            
-                            # Use fixed y-axis limits for PPG data
-                            self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
-                            
-                            self.axes.set_xlim(-self.window, 0)
-                            
-                            # Force redraw
-                            self.fig.canvas.draw()
-                            self.fig.canvas.flush_events()
+                                    # Update line data
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                    self.lines[ii].set_ydata(current_data)
+                                
+                                # Use fixed y-axis limits for PPG data
+                                self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
+                                self.axes.set_xlim(-self.window, 0)
+                                
+                                # Force redraw
+                                self.fig.canvas.draw()
+                                self.fig.canvas.flush_events()
+                                k = 0
                     
                     else:  # EEG
                         # Convert samples to numpy array if it's not already
@@ -358,14 +345,13 @@ class LSLViewer():
                             self.fig.canvas.draw()
                             k = 0
                 else:
-                    print(f"No {self.data_source} data received in this iteration")
                     # Force redraw periodically even when no new data
                     k += 1
                     if k >= self.display_every:
                         self.fig.canvas.draw()
                         self.fig.canvas.flush_events()
                         k = 0
-                    sleep(0.1)  # Shorter sleep for more responsive UI
+                    sleep(0.2)  # Slightly longer sleep to reduce CPU usage
         except RuntimeError as e:
             raise
 
