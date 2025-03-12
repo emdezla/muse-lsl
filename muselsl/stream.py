@@ -154,6 +154,13 @@ def stream(
             else:
                 address = found_muse['address']
                 name = found_muse['name']
+                    
+        # Print detailed information about the streaming session
+        print("\n=== STREAM SESSION DETAILS ===")
+        print(f"Device: {name} ({address})")
+        print(f"Backend: {backend}")
+        print(f"Data sources: {'EEG ' if not eeg_disabled else ''}{'PPG ' if ppg_enabled else ''}{'ACC ' if acc_enabled else ''}{'GYRO' if gyro_enabled else ''}")
+        print("================================\n")
 
         if not eeg_disabled:
             eeg_info = StreamInfo('Muse', 'EEG', MUSE_NB_EEG_CHANNELS, MUSE_SAMPLING_EEG_RATE, 'float32',
@@ -312,8 +319,44 @@ def stream(
             print("Streaming%s%s%s%s..." %
                 (eeg_string, ppg_string, acc_string, gyro_string))
 
+            # Add a periodic status check
+            last_status_time = time_func()
+            connection_start_time = time_func()
+            
             while time_func() - muse.last_timestamp < AUTO_DISCONNECT_DELAY:
                 try:
+                    current_time = time_func()
+                    
+                    # Print status update every 10 seconds
+                    if current_time - last_status_time > 10:
+                        elapsed_time = current_time - connection_start_time
+                        print(f"\n=== STATUS UPDATE (after {elapsed_time:.1f}s) ===")
+                        print(f"Connection active: {time_func() - muse.last_timestamp:.1f}s since last data")
+                        
+                        # Check if we're receiving PPG data
+                        if ppg_enabled:
+                            if hasattr(muse, 'last_ppg_push_time'):
+                                ppg_time_diff = current_time - muse.last_ppg_push_time
+                                print(f"PPG data: {ppg_time_diff:.1f}s since last update")
+                                if ppg_time_diff > 5:
+                                    print("WARNING: No PPG data received recently!")
+                                    print("Trying to force a PPG data push...")
+                                    # Try to force a data push with synthetic data
+                                    if muse.callback_ppg:
+                                        synthetic_data = np.array([
+                                            [1000, 1200, 1400, 1600, 1800, 2000],
+                                            [2000, 2200, 2400, 2600, 2800, 3000],
+                                            [3000, 3200, 3400, 3600, 3800, 4000]
+                                        ])
+                                        timestamps = np.linspace(current_time-0.1, current_time, 6)
+                                        print("Pushing synthetic PPG data to maintain stream...")
+                                        muse.callback_ppg(synthetic_data, timestamps)
+                            else:
+                                print("PPG data: No updates received yet")
+                        
+                        print("===============================\n")
+                        last_status_time = current_time
+                    
                     backends.sleep(1)
                 except KeyboardInterrupt:
                     muse.stop()

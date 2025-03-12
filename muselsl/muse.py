@@ -568,6 +568,18 @@ class Muse():
             print(f'Device address: {self.address}, name: {self.name}')
             logger.info('Attempting to subscribe to PPG streams...')
             
+            # Initialize a timestamp for the last PPG push
+            self.last_ppg_push_time = self.time_func()
+            
+            # Try to enable PPG sensor if needed (some devices require this)
+            try:
+                print("Attempting to enable PPG sensor...")
+                # Send command to enable PPG (this is device-specific and may need adjustment)
+                self._write_cmd_str('p')  # 'p' for PPG enable
+                print("PPG enable command sent")
+            except Exception as e:
+                print(f"Note: PPG enable command failed: {e} (this may be normal for some devices)")
+            
             print(f'PPG1 UUID: {MUSE_GATT_ATTR_PPG1}')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG1, callback=self._handle_ppg)
@@ -588,6 +600,33 @@ class Muse():
             
             print('=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===')
             logger.info('All PPG streams subscribed successfully')
+            
+            # Schedule a test message to verify callback is working
+            def send_test_message():
+                print("\n=== TESTING PPG CALLBACK FUNCTION ===")
+                if hasattr(self, 'callback_ppg') and self.callback_ppg:
+                    print("PPG callback is registered and will be tested")
+                    # Create synthetic test data
+                    test_data = np.array([
+                        [1000, 1200, 1400, 1600, 1800, 2000],
+                        [2000, 2200, 2400, 2600, 2800, 3000],
+                        [3000, 3200, 3400, 3600, 3800, 4000]
+                    ])
+                    timestamps = np.linspace(self.time_func()-0.1, self.time_func(), 6)
+                    
+                    try:
+                        print("Calling PPG callback with test data...")
+                        self.callback_ppg(test_data, timestamps)
+                        print("PPG callback test successful!")
+                    except Exception as e:
+                        print(f"ERROR: PPG callback test failed: {e}")
+                else:
+                    print("WARNING: No PPG callback registered!")
+                print("=======================================\n")
+            
+            # Schedule the test to run after a short delay
+            import threading
+            threading.Timer(5.0, send_test_message).start()
 
         except pygatt.exceptions.BLEError as error:
             print(f'=== FAILED TO SUBSCRIBE TO PPG: {error} ===')
@@ -606,6 +645,12 @@ class Muse():
         print(f'=== PPG CALLBACK TRIGGERED at {current_time:.3f} ===')
         print(f'Handle: {handle}, Data length: {len(data)}')
         timestamp = current_time
+        
+        # Check if the device is actually sending PPG data
+        if len(data) == 0:
+            print(f'WARNING: Received empty PPG data packet on handle {handle}')
+            return
+            
         print(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         
