@@ -232,11 +232,11 @@ class LSLViewer():
                     axs[i].set_ylim(-250, 250)
                 elif self.data_source == "PPG":
                     if i == 0:  # First channel (PPG IR)
-                        axs[i].set_ylim(0, 1000)
+                        axs[i].set_ylim(180000, 200000)
                     elif i == 1:  # Second channel (PPG Red)
-                        axs[i].set_ylim(10000, 110000)
+                        axs[i].set_ylim(140000, 160000)
                     elif i == 2:  # Third channel (PPG Green)
-                        axs[i].set_ylim(120000, 130000)
+                        axs[i].set_ylim(0, 1000)
             
             # Set fixed x-axis limits
             for ax in axs:
