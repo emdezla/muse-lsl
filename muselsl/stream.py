@@ -3,7 +3,7 @@ import subprocess
 from functools import partial
 from shutil import which
 from sys import platform
-from time import time
+from time import time, sleep
 import logging
 import numpy as np
 
