@@ -214,9 +214,9 @@ class LSLViewer():
                 samples, timestamps = self.inlet.pull_chunk(timeout=1.0,
                                                            max_samples=chunk_size)
 
-                if timestamps:
+                if timestamps and len(timestamps) > 0:
                     # Ensure timestamps is a 1D array
-                    timestamps = np.array(timestamps)
+                    timestamps = np.array(timestamps).flatten()
                     
                     if self.dejitter:
                         timestamps = np.float64(np.arange(len(timestamps)))
