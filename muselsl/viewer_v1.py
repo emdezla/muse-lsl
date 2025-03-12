@@ -21,16 +21,9 @@ def view(window, scale, refresh, figure, backend, data_source="EEG"):
         raise(RuntimeError(f"Can't find {data_source} stream."))
     print("Start acquiring data.")
 
-    # Create appropriate number of subplots based on data source
-    if data_source == "EEG":
-        fig, axes = matplotlib.pyplot.subplots(1, 1, figsize=figsize, sharex=True)
-        fig.suptitle('EEG Data', fontsize=16)
-    elif data_source == "PPG":
-        fig, axes = matplotlib.pyplot.subplots(3, 1, figsize=figsize, sharex=True)
-        fig.suptitle('PPG Data', fontsize=16)
-    elif data_source in ["ACC", "GYRO"]:
-        fig, axes = matplotlib.pyplot.subplots(3, 1, figsize=figsize, sharex=True)
-        fig.suptitle(f'{data_source} Data', fontsize=16)
+    # Simplified: use a single plot for all data types
+    fig, axes = matplotlib.pyplot.subplots(1, 1, figsize=figsize)
+    fig.suptitle(f'{data_source} Data', fontsize=16)
     
     lslv = LSLViewer(streams[0], fig, axes, window, scale, data_source=data_source)
     fig.canvas.mpl_connect('close_event', lslv.stop)
@@ -99,17 +92,16 @@ class LSLViewer():
 
         # Initialize data arrays based on data source
         self.times = np.arange(-self.window, 0, 1. / self.sfreq)
+        lines = []
         
         if self.data_source == "EEG":
             self.data = np.zeros((self.n_samples, self.n_chan))
             impedances = np.std(self.data, axis=0)
-            lines = []
             
             for ii in range(self.n_chan):
                 line, = self.axes.plot(self.times[::self.subsample],
                                   self.data[::self.subsample, ii] - ii, lw=1)
                 lines.append(line)
-            self.lines = lines
             
             self.axes.set_ylim(-self.n_chan + 0.5, 0.5)
             ticks = np.arange(0, -self.n_chan, -1)
@@ -125,60 +117,39 @@ class LSLViewer():
         elif self.data_source == "PPG":
             # For PPG, we have 3 channels
             self.data = np.zeros((self.n_samples, self.n_chan))
-            lines = []
             
-            # Create a separate subplot for each PPG channel
-            if isinstance(self.axes, np.ndarray):
-                for ii in range(min(3, self.n_chan)):
-                    line, = self.axes[ii].plot(self.times[::self.subsample],
-                                          self.data[::self.subsample, ii], lw=1)
-                    lines.append(line)
-                    self.axes[ii].set_ylabel(f'{self.ch_names[ii]} (a.u.)')
-                    self.axes[ii].set_xlabel('Time (s)' if ii == 2 else '')
-                    self.axes[ii].set_ylim(0, self.scale * 10)  # PPG values are typically higher
-            else:
-                # Fallback to single plot if axes is not an array
-                for ii in range(min(3, self.n_chan)):
-                    line, = self.axes.plot(self.times[::self.subsample],
-                                      self.data[::self.subsample, ii], lw=1, 
-                                      label=f'{self.ch_names[ii]}')
-                    lines.append(line)
-                self.axes.set_ylabel('Amplitude (a.u.)')
-                self.axes.set_xlabel('Time (s)')
-                self.axes.legend()
-                
-            self.lines = lines
+            # Use different colors for each channel
+            colors = ['r', 'g', 'b']
+            for ii in range(min(3, self.n_chan)):
+                line, = self.axes.plot(self.times[::self.subsample],
+                                  self.data[::self.subsample, ii], lw=1, 
+                                  label=f'Channel {ii+1}', color=colors[ii])
+                lines.append(line)
+            
+            self.axes.set_ylabel('Amplitude (a.u.)')
+            self.axes.set_xlabel('Time (s)')
+            self.axes.legend()
             
         elif self.data_source in ["ACC", "GYRO"]:
             # For ACC and GYRO, we have 3 axes (X, Y, Z)
             self.data = np.zeros((self.n_samples, 3))  # X, Y, Z
-            lines = []
             
             # Labels for axes
             axis_labels = ['X', 'Y', 'Z']
             y_unit = 'g' if self.data_source == "ACC" else 'deg/s'
+            colors = ['r', 'g', 'b']
             
-            # Create a separate subplot for each axis
-            if isinstance(self.axes, np.ndarray):
-                for ii in range(3):
-                    line, = self.axes[ii].plot(self.times[::self.subsample],
-                                          self.data[::self.subsample, ii], lw=1)
-                    lines.append(line)
-                    self.axes[ii].set_ylabel(f'{axis_labels[ii]} ({y_unit})')
-                    self.axes[ii].set_xlabel('Time (s)' if ii == 2 else '')
-                    self.axes[ii].set_ylim(-self.scale / 10, self.scale / 10)  # ACC/GYRO values are typically smaller
-            else:
-                # Fallback to single plot if axes is not an array
-                for ii in range(3):
-                    line, = self.axes.plot(self.times[::self.subsample],
-                                      self.data[::self.subsample, ii], lw=1, 
-                                      label=f'{axis_labels[ii]}')
-                    lines.append(line)
-                self.axes.set_ylabel(f'Amplitude ({y_unit})')
-                self.axes.set_xlabel('Time (s)')
-                self.axes.legend()
-                
-            self.lines = lines
+            for ii in range(3):
+                line, = self.axes.plot(self.times[::self.subsample],
+                                  self.data[::self.subsample, ii], lw=1, 
+                                  label=f'{axis_labels[ii]}', color=colors[ii])
+                lines.append(line)
+            
+            self.axes.set_ylabel(f'Amplitude ({y_unit})')
+            self.axes.set_xlabel('Time (s)')
+            self.axes.legend()
+        
+        self.lines = lines
 
         self.display_every = int(0.2 / (12 / self.sfreq))
 
@@ -241,7 +212,6 @@ class LSLViewer():
                         samples = np.array(samples)
                         
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
-                        # We need to reshape to get separate x, y, z channels
                         if len(samples) > 0:
                             print(f"Processing {len(samples)} {self.data_source} samples")
                             
@@ -252,9 +222,9 @@ class LSLViewer():
                             elif samples.ndim == 2 and samples.shape[1] == 3:
                                 # Normal case: multiple samples with x,y,z values
                                 reshaped_samples = samples
-                            elif samples.ndim == 3 and samples.shape[1] == 3 and samples.shape[2] == 1:
+                            elif samples.ndim == 3:
                                 # Handle case where samples might be 3D
-                                reshaped_samples = samples.reshape(samples.shape[0], 3)
+                                reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
                             else:
                                 print(f"WARNING: Unexpected {self.data_source} data shape: {samples.shape}")
                                 # Try to make it work anyway
@@ -263,63 +233,44 @@ class LSLViewer():
                             print(f"Reshaped to: {reshaped_samples.shape}")
                             print(f"Sample values: {reshaped_samples[0]}")
                             
+                            # Append new data and keep only the last n_samples
                             self.data = np.vstack([self.data, reshaped_samples])
                             self.data = self.data[-self.n_samples:]
                             
                             # No filtering for ACC/GYRO data
                             plot_data = self.data
                             
-                            k += 1
-                            if k == self.display_every:
-                                print(f"Updating {self.data_source} plot with {len(plot_data)} samples")
-                                # Update each axis plot
-                                if isinstance(self.axes, np.ndarray):
-                                    for ii in range(3):
-                                        # Get current data for this axis
-                                        current_data = plot_data[::self.subsample, ii]
-                                        
-                                        # Update line data
-                                        self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                        self.lines[ii].set_ydata(current_data)
-                                        
-                                        # Print some values for debugging
-                                        if len(current_data) > 0:
-                                            print(f"{self.data_source} Axis {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
-                                        
-                                        # Dynamically adjust y-limits based on current data
-                                        if len(current_data) > 0:
-                                            data_min, data_max = np.min(current_data), np.max(current_data)
-                                            data_range = max(data_max - data_min, 0.001)  # Avoid zero range
-                                            
-                                            # Center around the mean with padding
-                                            avg_value = np.mean(current_data)
-                                            y_min = avg_value - data_range * 1.2
-                                            y_max = avg_value + data_range * 1.2
-                                            
-                                            # Apply the new limits
-                                            self.axes[ii].set_ylim(y_min, y_max)
-                                        
-                                        self.axes[ii].set_xlim(-self.window, 0)
-                                else:
-                                    # Single plot case
-                                    for ii in range(3):
-                                        self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
-                                    
-                                    # Dynamically adjust y-limits for the combined plot
-                                    all_data = plot_data[::self.subsample, :].flatten()
-                                    if len(all_data) > 0:
-                                        data_min, data_max = np.min(all_data), np.max(all_data)
-                                        data_range = max(data_max - data_min, 0.001)
-                                        avg_value = np.mean(all_data)
-                                        y_min = avg_value - data_range * 1.2
-                                        y_max = avg_value + data_range * 1.2
-                                        self.axes.set_ylim(y_min, y_max)
-                                    
-                                    self.axes.set_xlim(-self.window, 0)
+                            # Force update every time for better responsiveness
+                            print(f"Updating {self.data_source} plot with {len(plot_data)} samples")
+                            
+                            # Update each axis line
+                            for ii in range(3):
+                                # Get current data for this axis
+                                current_data = plot_data[::self.subsample, ii]
                                 
-                                self.fig.canvas.draw()
-                                k = 0
+                                # Update line data
+                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                self.lines[ii].set_ydata(current_data)
+                                
+                                # Print some values for debugging
+                                if len(current_data) > 0:
+                                    print(f"{self.data_source} Axis {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
+                            
+                            # Dynamically adjust y-limits for the combined plot
+                            all_data = plot_data[::self.subsample, :].flatten()
+                            if len(all_data) > 0:
+                                data_min, data_max = np.min(all_data), np.max(all_data)
+                                data_range = max(data_max - data_min, 0.001)
+                                avg_value = np.mean(all_data)
+                                y_min = avg_value - data_range * 1.2
+                                y_max = avg_value + data_range * 1.2
+                                self.axes.set_ylim(y_min, y_max)
+                            
+                            self.axes.set_xlim(-self.window, 0)
+                            
+                            # Force redraw
+                            self.fig.canvas.draw()
+                            self.fig.canvas.flush_events()
                     
                     elif self.data_source == "PPG":
                         # Convert samples to numpy array if it's not already
@@ -338,58 +289,38 @@ class LSLViewer():
                             self.data = np.vstack([self.data, samples])
                             self.data = self.data[-self.n_samples:]
                         
-                        # No filtering for PPG data
-                        plot_data = self.data
-                        
-                        k += 1
-                        if k == self.display_every:
-                            print(f"Updating PPG plot with {len(plot_data)} samples")
-                            # Update each PPG channel plot
-                            if isinstance(self.axes, np.ndarray):
-                                for ii in range(min(3, self.n_chan)):
-                                    # Get current data for this channel
-                                    current_data = plot_data[::self.subsample, ii]
-                                        
-                                    # Print some values for debugging
-                                    if len(current_data) > 0:
-                                        print(f"PPG Channel {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
-                                        
-                                    # Update line data
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(current_data)
-                                    
-                                    # Dynamically adjust y-limits based on current data
-                                    if len(current_data) > 0:
-                                        data_min, data_max = np.min(current_data), np.max(current_data)
-                                        data_range = max(data_max - data_min, 1.0)  # Avoid zero range
-                                        
-                                        # For PPG, we typically want to start from zero or slightly below
-                                        y_min = max(0, data_min - data_range * 0.1)
-                                        y_max = data_max + data_range * 0.1
-                                        
-                                        # Apply the new limits
-                                        self.axes[ii].set_ylim(y_min, y_max)
-                                    
-                                    self.axes[ii].set_xlim(-self.window, 0)
-                            else:
-                                # Single plot case
-                                for ii in range(min(3, self.n_chan)):
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
-                                
-                                # Dynamically adjust y-limits for the combined plot
-                                all_data = plot_data[::self.subsample, :min(3, self.n_chan)].flatten()
-                                if len(all_data) > 0:
-                                    data_min, data_max = np.min(all_data), np.max(all_data)
-                                    data_range = max(data_max - data_min, 1.0)
-                                    y_min = max(0, data_min - data_range * 0.1)
-                                    y_max = data_max + data_range * 0.1
-                                    self.axes.set_ylim(y_min, y_max)
-                                
-                                self.axes.set_xlim(-self.window, 0)
+                            # No filtering for PPG data
+                            plot_data = self.data
                             
+                            print(f"Updating PPG plot with {len(plot_data)} samples")
+                            
+                            # Update each PPG channel
+                            for ii in range(min(3, self.n_chan)):
+                                # Get current data for this channel
+                                current_data = plot_data[::self.subsample, ii]
+                                    
+                                # Print some values for debugging
+                                if len(current_data) > 0:
+                                    print(f"PPG Channel {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
+                                    
+                                # Update line data
+                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                self.lines[ii].set_ydata(current_data)
+                            
+                            # Dynamically adjust y-limits for the combined plot
+                            all_data = plot_data[::self.subsample, :min(3, self.n_chan)].flatten()
+                            if len(all_data) > 0:
+                                data_min, data_max = np.min(all_data), np.max(all_data)
+                                data_range = max(data_max - data_min, 1.0)
+                                y_min = max(0, data_min - data_range * 0.1)
+                                y_max = data_max + data_range * 0.1
+                                self.axes.set_ylim(y_min, y_max)
+                            
+                            self.axes.set_xlim(-self.window, 0)
+                            
+                            # Force redraw
                             self.fig.canvas.draw()
-                            k = 0
+                            self.fig.canvas.flush_events()
                     
                     else:  # EEG
                         # Convert samples to numpy array if it's not already
@@ -430,7 +361,13 @@ class LSLViewer():
                             k = 0
                 else:
                     print(f"No {self.data_source} data received in this iteration")
-                    sleep(0.2)
+                    # Force redraw periodically even when no new data
+                    k += 1
+                    if k >= self.display_every:
+                        self.fig.canvas.draw()
+                        self.fig.canvas.flush_events()
+                        k = 0
+                    sleep(0.1)  # Shorter sleep for more responsive UI
         except RuntimeError as e:
             raise
 
