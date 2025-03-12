@@ -129,6 +129,8 @@ class LSLViewer():
             self.axes.set_ylabel('Amplitude (a.u.)')
             self.axes.set_xlabel('Time (s)')
             self.axes.legend()
+            # Set fixed y-axis limits for PPG
+            self.axes.set_ylim(0, 4000)
             
         elif self.data_source in ["ACC", "GYRO"]:
             # For ACC and GYRO, we have 3 axes (X, Y, Z)
@@ -148,6 +150,12 @@ class LSLViewer():
             self.axes.set_ylabel(f'Amplitude ({y_unit})')
             self.axes.set_xlabel('Time (s)')
             self.axes.legend()
+            
+            # Set fixed y-axis limits based on data type
+            if self.data_source == "ACC":
+                self.axes.set_ylim(-2, 2)  # Fixed range for accelerometer in g
+            else:  # GYRO
+                self.axes.set_ylim(-250, 250)  # Fixed range for gyroscope in deg/s
         
         self.lines = lines
 
@@ -256,15 +264,11 @@ class LSLViewer():
                                 if len(current_data) > 0:
                                     print(f"{self.data_source} Axis {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
                             
-                            # Dynamically adjust y-limits for the combined plot
-                            all_data = plot_data[::self.subsample, :].flatten()
-                            if len(all_data) > 0:
-                                data_min, data_max = np.min(all_data), np.max(all_data)
-                                data_range = max(data_max - data_min, 0.001)
-                                avg_value = np.mean(all_data)
-                                y_min = avg_value - data_range * 1.2
-                                y_max = avg_value + data_range * 1.2
-                                self.axes.set_ylim(y_min, y_max)
+                            # Use fixed y-axis limits for ACC data
+                            if self.data_source == "ACC":
+                                self.axes.set_ylim(-2, 2)  # Fixed range for accelerometer in g
+                            elif self.data_source == "GYRO":
+                                self.axes.set_ylim(-250, 250)  # Fixed range for gyroscope in deg/s
                             
                             self.axes.set_xlim(-self.window, 0)
                             
@@ -307,14 +311,8 @@ class LSLViewer():
                                 self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
                                 self.lines[ii].set_ydata(current_data)
                             
-                            # Dynamically adjust y-limits for the combined plot
-                            all_data = plot_data[::self.subsample, :min(3, self.n_chan)].flatten()
-                            if len(all_data) > 0:
-                                data_min, data_max = np.min(all_data), np.max(all_data)
-                                data_range = max(data_max - data_min, 1.0)
-                                y_min = max(0, data_min - data_range * 0.1)
-                                y_max = data_max + data_range * 0.1
-                                self.axes.set_ylim(y_min, y_max)
+                            # Use fixed y-axis limits for PPG data
+                            self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
                             
                             self.axes.set_xlim(-self.window, 0)
                             
