@@ -234,6 +234,7 @@ class LSLViewer():
                     # Calculate y-axis limits based on the average of the signal for each channel
                     with self.lock:
                         avg_signal = np.mean(self.data_buffer[i, :])
+                    print(f"Channel {i} average signal: {avg_signal}")
                     axs[i].set_ylim(avg_signal - 1000, avg_signal + 1000)
             
             # Set fixed x-axis limits
