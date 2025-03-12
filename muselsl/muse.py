@@ -574,17 +574,50 @@ class Muse():
             # Try to enable PPG sensor with multiple commands (different devices use different commands)
             try:
                 print("Attempting to enable PPG sensor with multiple commands...")
-                # Try different commands known to enable PPG on various Muse models
-                self._write_cmd_str('p')  # Basic PPG enable
-                print("Basic PPG enable command sent")
                 
-                # Add a small delay to let the command take effect
-                sleep(0.5)
-                
-                # Try preset 20 which is known to enable PPG on some devices
-                print("Trying preset 20 (enables PPG on some devices)")
-                self.select_preset(20)
-                sleep(0.5)
+                # For Muse S, try specific commands known to work
+                if self.name and "MuseS" in self.name:
+                    print("Detected Muse S device, using specific PPG enable sequence")
+                    
+                    # First, try preset 21 (default)
+                    self.select_preset(21)
+                    sleep(0.5)
+                    
+                    # Send 'p' command to enable PPG
+                    self._write_cmd_str('p')
+                    print("Sent 'p' command to enable PPG")
+                    sleep(0.5)
+                    
+                    # Try preset 20 which is known to enable PPG on some devices
+                    print("Trying preset 20 (enables PPG on Muse S)")
+                    self.select_preset(20)
+                    sleep(0.5)
+                    
+                    # Send specific PPG enable command for Muse S
+                    print("Sending Muse S specific PPG enable command")
+                    self._write_cmd([0x02, 0x70, 0x0a])  # 'p' command in raw format
+                    sleep(0.5)
+                    
+                    # Try additional commands for Muse S
+                    try:
+                        # These are specific commands that might enable PPG on Muse S
+                        print("Sending additional Muse S PPG commands")
+                        self._write_cmd_str('dp')  # 'd' to resume streaming + 'p' for PPG
+                        sleep(0.2)
+                        self._write_cmd([0x03, 0x70, 0x32, 0x0a])  # 'p2' command
+                        print("Additional Muse S commands sent")
+                    except Exception as e:
+                        print(f"Additional Muse S commands failed: {e}")
+                else:
+                    # Generic commands for other Muse models
+                    self._write_cmd_str('p')  # Basic PPG enable
+                    print("Basic PPG enable command sent")
+                    sleep(0.5)
+                    
+                    # Try preset 20 which is known to enable PPG on some devices
+                    print("Trying preset 20 (enables PPG on some devices)")
+                    self.select_preset(20)
+                    sleep(0.5)
                 
                 # Try a direct command to the PPG control handle
                 try:
@@ -664,6 +697,13 @@ class Muse():
         current_time = self.time_func()
         print(f'=== PPG CALLBACK TRIGGERED at {current_time:.3f} ===')
         print(f'Handle: {handle}, Data length: {len(data)}')
+        
+        # Log all active handles to help debug
+        if not hasattr(self, 'ppg_handles_seen'):
+            self.ppg_handles_seen = set()
+        self.ppg_handles_seen.add(handle)
+        print(f'PPG handles seen so far: {sorted(self.ppg_handles_seen)}')
+        
         timestamp = current_time
         
         # Check if the device is actually sending PPG data
@@ -824,8 +864,38 @@ class Muse():
             # Try multiple decoding patterns based on the packet length
             decoded_data = None
             
+            # Special handling for Muse S
+            if hasattr(self, 'name') and self.name and "MuseS" in self.name:
+                print("Using Muse S specific decoding patterns")
+                
+                # Try Muse S specific format (observed in some devices)
+                if len(packet) >= 8:
+                    try:
+                        # Some Muse S devices use a different format with fewer bytes per sample
+                        data = []
+                        # Skip first 2 bytes (timestamp)
+                        for i in range(2, min(len(packet), 14), 2):
+                            if i+1 < len(packet):
+                                # Read 2 bytes as a 16-bit integer
+                                value = int.from_bytes(packet[i:i+2], byteorder='little')
+                                data.append(value)
+                        
+                        # Pad to 6 values if needed
+                        while len(data) < 6:
+                            data.append(data[-1] if data else 1000)  # Repeat last value or use 1000
+                        
+                        # Truncate if too many
+                        data = data[:6]
+                        
+                        # Check if data is valid (non-zero)
+                        if any(x > 0 for x in data):
+                            print(f'Successfully decoded Muse S PPG data with byte parsing: {data}')
+                            decoded_data = data
+                    except Exception as e:
+                        print(f'Error decoding with Muse S specific format: {e}')
+            
             # Try standard 24-bit format (used by Muse 2)
-            if len(packet) >= 16:
+            if decoded_data is None and len(packet) >= 16:
                 try:
                     aa = bitstring.Bits(bytes=packet)
                     pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
@@ -840,7 +910,7 @@ class Muse():
                 except Exception as e:
                     print(f'Error decoding with 24-bit format: {e}')
             
-            # Try 16-bit format (used by some Muse S models)
+            # Try 16-bit format (used by some Muse models)
             if decoded_data is None and len(packet) >= 12:
                 try:
                     aa = bitstring.Bits(bytes=packet)

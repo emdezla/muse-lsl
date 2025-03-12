@@ -362,10 +362,26 @@ def stream(
                                             print("Attempting to re-enable PPG after 30s of no data...")
                                             try:
                                                 # Try different commands to re-enable PPG
-                                                muse._write_cmd_str('p')  # Basic PPG enable
-                                                sleep(0.2)
-                                                muse.select_preset(20)  # Try preset 20
+                                                if muse.name and "MuseS" in muse.name:
+                                                    print("Using Muse S specific re-enable sequence")
+                                                    # First try to reset the device's PPG system
+                                                    muse._write_cmd_str('h')  # Stop streaming
+                                                    sleep(0.5)
+                                                    muse._write_cmd_str('p')  # PPG enable
+                                                    sleep(0.2)
+                                                    muse.select_preset(20)  # Try preset 20
+                                                    sleep(0.2)
+                                                    muse._write_cmd_str('d')  # Resume streaming
+                                                else:
+                                                    muse._write_cmd_str('p')  # Basic PPG enable
+                                                    sleep(0.2)
+                                                    muse.select_preset(20)  # Try preset 20
                                                 print("PPG re-enable commands sent")
+                                                
+                                                # Print debug info about PPG handles
+                                                if hasattr(muse, 'ppg_handles_seen'):
+                                                    print(f"PPG handles seen during session: {sorted(muse.ppg_handles_seen)}")
+                                                
                                             except Exception as e:
                                                 print(f"PPG re-enable failed: {e}")
                             else:
