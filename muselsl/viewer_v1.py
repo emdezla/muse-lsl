@@ -201,6 +201,9 @@ class LSLViewer():
                                 
                                 # Move buffer index
                                 self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
+                
+                if timestamps and len(timestamps) > 0:
+                    pass  # Ya procesamos este caso arriba
                 else:
                     # No data received, sleep a bit
                     if self.data_source == "PPG":
