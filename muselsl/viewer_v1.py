@@ -125,38 +125,10 @@ class LSLViewer():
                     timestamps = np.array(timestamps)
                     samples = np.array(samples)
                     
-                    # Debug incoming data
-                    if self.data_source == "PPG":
-                        print(f"Received {len(timestamps)} PPG samples with shape: {samples.shape}")
-                        print(f"Sample values: {samples[:5] if len(samples) >= 5 else samples}")
-                        
-                        # Check for all zeros or very small values
-                        if np.all(np.abs(samples) < 0.001):
-                            print("WARNING: All PPG values are zero or very small!")
-                        
-                        # Check for reasonable range
-                        if np.max(samples) > 0:
-                            print(f"PPG value range: {np.min(samples)} to {np.max(samples)}")
+                    # No debug output for PPG data
                 else:
                     # No data received
                     empty_count += 1
-                    current_time = time()
-                    
-                    # Only print warning every 5 seconds to avoid flooding console
-                    if self.data_source == "PPG" and current_time - last_warning_time > 5:
-                        print(f"No PPG data received in this iteration (count: {empty_count})")
-                        print("Checking LSL streams again...")
-                        
-                        # Re-check available streams
-                        streams = resolve_byprop('type', self.data_source, timeout=1.0)
-                        if streams:
-                            print(f"Found {len(streams)} {self.data_source} streams:")
-                            for i, stream in enumerate(streams):
-                                print(f"  Stream {i+1}: {stream.name()} ({stream.channel_count()} channels)")
-                        else:
-                            print(f"No {self.data_source} streams found!")
-                        
-                        last_warning_time = current_time
                     
                     # Process samples based on data type
                     if self.data_source in ["ACC", "GYRO"]:
@@ -188,26 +160,20 @@ class LSLViewer():
                                 if samples.ndim == 1:
                                     # Single sample case
                                     self.data_buffer[0, idx] = samples[i]
-                                    if self.data_source == "PPG":
-                                        print(f"Stored single PPG sample: {samples[i]}")
+                                    # No debug output for PPG
                                 else:
                                     # Multiple channel case
                                     sample = samples[i]
                                     for ch in range(min(self.n_chan, len(sample))):
                                         self.data_buffer[ch, idx] = sample[ch]
                                     
-                                    if self.data_source == "PPG":
-                                        print(f"Stored multi-channel PPG sample: {sample[:self.n_chan]}")
+                                    # No debug output for PPG
                                 
                                 # Move buffer index
                                 self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
                 
-                if timestamps and len(timestamps) > 0:
-                    pass  # Ya procesamos este caso arriba
-                else:
+                if not timestamps or len(timestamps) == 0:
                     # No data received, sleep a bit
-                    if self.data_source == "PPG":
-                        print("No PPG data received in this iteration")
                     sleep(0.1)
         except Exception as e:
             print(f"Error in update_buffer: {e}")
@@ -311,28 +277,15 @@ class LSLViewer():
                 d = np.roll(self.data_buffer, -idx, axis=1)
             
             # Debug data buffer state
-            if self.data_source == "PPG":
-                non_zero_count = np.count_nonzero(d)
-                if non_zero_count > 0:
-                    print(f"=== PPG DATA FOUND IN BUFFER ===")
-                    print(f"PPG data buffer has {non_zero_count} non-zero values")
-                    print(f"Sample values: {d[:, -10:] if d.shape[1] >= 10 else d}")
-                    # Print min/max values to check data range
-                    print(f"Min values per channel: {np.min(d, axis=1)}")
-                    print(f"Max values per channel: {np.max(d, axis=1)}")
-                else:
-                    print("=== PPG DATA BUFFER IS EMPTY ===")
-                    print("PPG data buffer is empty (all zeros)")
-                    # Insert test data to verify plotting works
-                    print("Inserting test data to verify plotting functionality")
-                    test_indices = np.arange(min(100, d.shape[1]))
-                    for ch in range(d.shape[0]):
-                        # Create sine wave test pattern with different phases per channel
-                        d[ch, test_indices] = 1000 * np.sin(0.1 * test_indices + ch * np.pi/3) + 2000
-                    # Also insert fake timestamps
-                    current_time = time()
-                    t[test_indices] = current_time - np.flip(0.01 * test_indices)
-                    print(f"Inserted test data with {len(test_indices)} points")
+            if self.data_source == "PPG" and np.count_nonzero(d) == 0:
+                # Insert test data to verify plotting works
+                test_indices = np.arange(min(100, d.shape[1]))
+                for ch in range(d.shape[0]):
+                    # Create sine wave test pattern with different phases per channel
+                    d[ch, test_indices] = 1000 * np.sin(0.1 * test_indices + ch * np.pi/3) + 2000
+                # Also insert fake timestamps
+                current_time = time()
+                t[test_indices] = current_time - np.flip(0.01 * test_indices)
             
             # Filter data for the time window
             if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
@@ -342,20 +295,17 @@ class LSLViewer():
                 if np.sum(mask) > 0:
                     t_plot = t[mask]
                     d_plot = d[:, mask]
-                    if self.data_source == "PPG":
-                        print(f"Plotting {len(t_plot)} PPG data points")
+                    # No debug output for PPG
                 else:
                     # If no data in time window yet, use all available non-zero data
                     non_zero_mask = t != 0
                     t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
                     d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((channels, 1))
-                    if self.data_source == "PPG" and np.any(non_zero_mask):
-                        print(f"Using {np.sum(non_zero_mask)} non-zero PPG data points")
+                    # No debug output for PPG
             else:
                 t_plot = np.array([0])
                 d_plot = np.zeros((channels, 1))
-                if self.data_source == "PPG":
-                    print("No valid timestamps found for PPG data")
+                # No debug output for PPG
 
             # Normalize time to show seconds from current time
             if len(t_plot) > 0 and t_plot[-1] != 0:
