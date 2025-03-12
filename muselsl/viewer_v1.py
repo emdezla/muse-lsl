@@ -182,13 +182,18 @@ class LSLViewer():
 
         self.display_every = int(0.2 / (12 / self.sfreq))
 
-        self.bf = firwin(32, np.array([1, 40]) / (self.sfreq / 2.), width=0.05,
-                         pass_zero=False)
-        self.af = [1.0]
+        # Only initialize filters for EEG data
+        if self.data_source == "EEG":
+            self.bf = firwin(32, np.array([1, 40]) / (self.sfreq / 2.), width=0.05,
+                            pass_zero=False)
+            self.af = [1.0]
 
-        zi = lfilter_zi(self.bf, self.af)
-        self.filt_state = np.tile(zi, (self.n_chan, 1)).transpose()
-        self.data_f = np.zeros((self.n_samples, self.n_chan))
+            zi = lfilter_zi(self.bf, self.af)
+            self.filt_state = np.tile(zi, (self.n_chan, 1)).transpose()
+            self.data_f = np.zeros((self.n_samples, self.n_chan))
+        else:
+            # For non-EEG data, we don't need filtering
+            self.filt = False
 
     def update_plot(self):
         k = 0
@@ -241,18 +246,43 @@ class LSLViewer():
                                 # Update each axis plot
                                 if isinstance(self.axes, np.ndarray):
                                     for ii in range(3):
-                                        self.lines[ii].set_xdata(self.times[::self.subsample] -
-                                                                self.times[-1])
-                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
-                                                                (self.scale / 10))
+                                        # Get current data for this axis
+                                        current_data = plot_data[::self.subsample, ii]
+                                        
+                                        # Update line data
+                                        self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                        self.lines[ii].set_ydata(current_data)
+                                        
+                                        # Dynamically adjust y-limits based on current data
+                                        if len(current_data) > 0:
+                                            data_min, data_max = np.min(current_data), np.max(current_data)
+                                            data_range = max(data_max - data_min, 0.001)  # Avoid zero range
+                                            
+                                            # Center around the mean with padding
+                                            avg_value = np.mean(current_data)
+                                            y_min = avg_value - data_range * 1.2
+                                            y_max = avg_value + data_range * 1.2
+                                            
+                                            # Apply the new limits
+                                            self.axes[ii].set_ylim(y_min, y_max)
+                                        
                                         self.axes[ii].set_xlim(-self.window, 0)
                                 else:
                                     # Single plot case
                                     for ii in range(3):
-                                        self.lines[ii].set_xdata(self.times[::self.subsample] -
-                                                                self.times[-1])
-                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
-                                                                (self.scale / 10))
+                                        self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
+                                    
+                                    # Dynamically adjust y-limits for the combined plot
+                                    all_data = plot_data[::self.subsample, :].flatten()
+                                    if len(all_data) > 0:
+                                        data_min, data_max = np.min(all_data), np.max(all_data)
+                                        data_range = max(data_max - data_min, 0.001)
+                                        avg_value = np.mean(all_data)
+                                        y_min = avg_value - data_range * 1.2
+                                        y_max = avg_value + data_range * 1.2
+                                        self.axes.set_ylim(y_min, y_max)
+                                    
                                     self.axes.set_xlim(-self.window, 0)
                                 
                                 self.fig.canvas.draw()
@@ -271,16 +301,41 @@ class LSLViewer():
                             # Update each PPG channel plot
                             if isinstance(self.axes, np.ndarray):
                                 for ii in range(min(3, self.n_chan)):
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] -
-                                                            self.times[-1])
-                                    self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
+                                    # Get current data for this channel
+                                    current_data = plot_data[::self.subsample, ii]
+                                    
+                                    # Update line data
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                    self.lines[ii].set_ydata(current_data)
+                                    
+                                    # Dynamically adjust y-limits based on current data
+                                    if len(current_data) > 0:
+                                        data_min, data_max = np.min(current_data), np.max(current_data)
+                                        data_range = max(data_max - data_min, 1.0)  # Avoid zero range
+                                        
+                                        # For PPG, we typically want to start from zero or slightly below
+                                        y_min = max(0, data_min - data_range * 0.1)
+                                        y_max = data_max + data_range * 0.1
+                                        
+                                        # Apply the new limits
+                                        self.axes[ii].set_ylim(y_min, y_max)
+                                    
                                     self.axes[ii].set_xlim(-self.window, 0)
                             else:
                                 # Single plot case
                                 for ii in range(min(3, self.n_chan)):
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] -
-                                                            self.times[-1])
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
                                     self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
+                                
+                                # Dynamically adjust y-limits for the combined plot
+                                all_data = plot_data[::self.subsample, :min(3, self.n_chan)].flatten()
+                                if len(all_data) > 0:
+                                    data_min, data_max = np.min(all_data), np.max(all_data)
+                                    data_range = max(data_max - data_min, 1.0)
+                                    y_min = max(0, data_min - data_range * 0.1)
+                                    y_max = data_max + data_range * 0.1
+                                    self.axes.set_ylim(y_min, y_max)
+                                
                                 self.axes.set_xlim(-self.window, 0)
                             
                             self.fig.canvas.draw()
@@ -289,12 +344,15 @@ class LSLViewer():
                     else:  # EEG
                         self.data = np.vstack([self.data, samples])
                         self.data = self.data[-self.n_samples:]
-                        filt_samples, self.filt_state = lfilter(
-                            self.bf, self.af,
-                            samples,
-                            axis=0, zi=self.filt_state)
-                        self.data_f = np.vstack([self.data_f, filt_samples])
-                        self.data_f = self.data_f[-self.n_samples:]
+                        
+                        # Only apply filtering for EEG data
+                        if hasattr(self, 'bf') and hasattr(self, 'af') and hasattr(self, 'filt_state'):
+                            filt_samples, self.filt_state = lfilter(
+                                self.bf, self.af,
+                                samples,
+                                axis=0, zi=self.filt_state)
+                            self.data_f = np.vstack([self.data_f, filt_samples])
+                            self.data_f = self.data_f[-self.n_samples:]
                         k += 1
                         if k == self.display_every:
                             if self.filt:
