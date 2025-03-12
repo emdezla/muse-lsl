@@ -603,8 +603,8 @@ class Muse():
         wait until we get x and call the data callback
         """
         timestamp = self.time_func()
-        print(f'Received PPG data on handle: {handle}, data length: {len(data)}')
-        logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}')
+        print(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
+        logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         
         # Check if handle is in the expected range
         if handle not in [56, 59, 62]:
@@ -617,8 +617,8 @@ class Muse():
         
         try:
             tm, d = self._unpack_ppg_channel(data)
-            print(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}')
-            logger.debug(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}')
+            print(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}, values: {d}')
+            logger.debug(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}, values: {d}')
         except Exception as e:
             print(f'Error unpacking PPG data: {e}, data: {data.hex()}')
             logger.error(f'Error unpacking PPG data: {e}, data: {data.hex()}')
@@ -655,7 +655,22 @@ class Muse():
             # push data
             if self.callback_ppg:
                 print(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}, data: {self.data_ppg}')
+                print(f'PPG timestamps: {timestamps}')
                 logger.debug(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}')
+                
+                # Check for invalid values
+                if np.isnan(self.data_ppg).any():
+                    print(f'WARNING: NaN values detected in PPG data')
+                if np.isinf(self.data_ppg).any():
+                    print(f'WARNING: Infinite values detected in PPG data')
+                
+                # Convert any large values to a reasonable range
+                if np.max(self.data_ppg) > 100000:
+                    print(f'WARNING: Very large values detected in PPG data: {np.max(self.data_ppg)}')
+                    # Clip to reasonable range
+                    self.data_ppg = np.clip(self.data_ppg, 0, 10000)
+                    print(f'Clipped PPG data: {self.data_ppg}')
+                
                 self.callback_ppg(self.data_ppg, timestamps)
             else:
                 print('PPG callback is None, data not being processed')

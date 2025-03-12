@@ -218,6 +218,7 @@ def stream(
 
         def push_ppg_with_debug(data, timestamps):
             print(f"Received PPG data with shape: {data.shape}, timestamps length: {len(timestamps)}")
+            print(f"PPG data values: {data}")
             try:
                 for ii in range(data.shape[1]):
                     print(f"Pushing PPG sample {ii}: {data[:, ii]}, timestamp: {timestamps[ii]}")
