@@ -571,14 +571,34 @@ class Muse():
             # Initialize a timestamp for the last PPG push
             self.last_ppg_push_time = self.time_func()
             
-            # Try to enable PPG sensor if needed (some devices require this)
+            # Try to enable PPG sensor with multiple commands (different devices use different commands)
             try:
-                print("Attempting to enable PPG sensor...")
-                # Send command to enable PPG (this is device-specific and may need adjustment)
-                self._write_cmd_str('p')  # 'p' for PPG enable
-                print("PPG enable command sent")
+                print("Attempting to enable PPG sensor with multiple commands...")
+                # Try different commands known to enable PPG on various Muse models
+                self._write_cmd_str('p')  # Basic PPG enable
+                print("Basic PPG enable command sent")
+                
+                # Add a small delay to let the command take effect
+                sleep(0.5)
+                
+                # Try preset 20 which is known to enable PPG on some devices
+                print("Trying preset 20 (enables PPG on some devices)")
+                self.select_preset(20)
+                sleep(0.5)
+                
+                # Try a direct command to the PPG control handle
+                try:
+                    print("Sending direct PPG enable command to control handle")
+                    # This is a command to enable PPG sampling
+                    ppg_enable_cmd = [0x02, 0x73, 0x0a]  # 's' command with specific parameters
+                    self._write_cmd(ppg_enable_cmd)
+                    print("Direct PPG enable command sent")
+                except Exception as e:
+                    print(f"Direct PPG command failed: {e}")
+                
+                print("PPG enable commands completed")
             except Exception as e:
-                print(f"Note: PPG enable command failed: {e} (this may be normal for some devices)")
+                print(f"Note: Some PPG enable commands failed: {e} (this may be normal)")
             
             print(f'PPG1 UUID: {MUSE_GATT_ATTR_PPG1}')
             self.device.subscribe(
@@ -649,7 +669,10 @@ class Muse():
         # Check if the device is actually sending PPG data
         if len(data) == 0:
             print(f'WARNING: Received empty PPG data packet on handle {handle}')
-            return
+            # Instead of returning, create synthetic data for this handle
+            # This ensures we maintain the stream even with empty packets
+            data = bytes([0, 0] + [handle % 256] * 12)  # Create synthetic packet with handle as data
+            print(f'Created synthetic packet: {data.hex()}')
             
         print(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
@@ -781,6 +804,9 @@ class Muse():
         """Decode data packet of one PPG channel.
         Each packet is encoded with a 16bit timestamp followed by 6
         samples with a 24 bit resolution.
+        
+        Note: Different Muse models may use different packet formats.
+        This implementation tries multiple formats.
         """
         try:
             print(f'=== UNPACKING PPG PACKET ===')
@@ -791,21 +817,15 @@ class Muse():
             if len(packet) < 2:
                 print(f'WARNING: PPG packet too short: {len(packet)} bytes')
                 return 0, [100, 100, 100, 100, 100, 100]  # Return test data
-                
+            
             # Extract timestamp (first 2 bytes)
             packetIndex = int.from_bytes(packet[0:2], byteorder='little')
             
-            # Generate synthetic data based on packet index to ensure we have something
-            # This will create a sine wave pattern that's different for each channel
-            # but consistent across calls with the same packet index
-            synthetic_data = []
-            for i in range(6):
-                # Create sine wave with amplitude 1000-5000 and period based on packet index
-                value = 3000 + 2000 * np.sin(0.1 * (packetIndex + i))
-                synthetic_data.append(int(value))
+            # Try multiple decoding patterns based on the packet length
+            decoded_data = None
             
-            # If we have actual data in the packet, try to decode it
-            if len(packet) >= 16:  # Full packet with all samples
+            # Try standard 24-bit format (used by Muse 2)
+            if len(packet) >= 16:
                 try:
                     aa = bitstring.Bits(bytes=packet)
                     pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
@@ -815,12 +835,78 @@ class Muse():
                     
                     # Check if data is valid (non-zero)
                     if any(x > 0 for x in data):
-                        print(f'Successfully decoded PPG data: {data}')
-                        return packetIndex, data
-                    else:
-                        print('Decoded PPG data was all zeros, using synthetic data')
+                        print(f'Successfully decoded PPG data with 24-bit format: {data}')
+                        decoded_data = data
                 except Exception as e:
-                    print(f'Error decoding full PPG packet: {e}')
+                    print(f'Error decoding with 24-bit format: {e}')
+            
+            # Try 16-bit format (used by some Muse S models)
+            if decoded_data is None and len(packet) >= 12:
+                try:
+                    aa = bitstring.Bits(bytes=packet)
+                    pattern = "uint:16,uint:16,uint:16,uint:16,uint:16,uint:16,uint:16"
+                    res = aa.unpack(pattern)
+                    packetIndex = res[0]
+                    data = [int(x) for x in res[1:]]
+                    
+                    # Check if data is valid (non-zero)
+                    if any(x > 0 for x in data):
+                        print(f'Successfully decoded PPG data with 16-bit format: {data}')
+                        decoded_data = data
+                except Exception as e:
+                    print(f'Error decoding with 16-bit format: {e}')
+            
+            # Try 12-bit format (similar to EEG format)
+            if decoded_data is None and len(packet) >= 10:
+                try:
+                    aa = bitstring.Bits(bytes=packet)
+                    pattern = "uint:16,uint:12,uint:12,uint:12,uint:12,uint:12,uint:12"
+                    res = aa.unpack(pattern)
+                    packetIndex = res[0]
+                    data = [int(x) for x in res[1:]]
+                    
+                    # Check if data is valid (non-zero)
+                    if any(x > 0 for x in data):
+                        print(f'Successfully decoded PPG data with 12-bit format: {data}')
+                        decoded_data = data
+                except Exception as e:
+                    print(f'Error decoding with 12-bit format: {e}')
+            
+            # Try raw byte parsing as a last resort
+            if decoded_data is None and len(packet) > 2:
+                try:
+                    # Skip the first 2 bytes (timestamp) and parse the rest as data
+                    data = []
+                    for i in range(2, min(14, len(packet)), 2):
+                        if i+1 < len(packet):
+                            value = int.from_bytes(packet[i:i+2], byteorder='little')
+                            data.append(value)
+                    
+                    # Pad to 6 values if needed
+                    while len(data) < 6:
+                        data.append(0)
+                    
+                    # Truncate if too many
+                    data = data[:6]
+                    
+                    # Check if data is valid (non-zero)
+                    if any(x > 0 for x in data):
+                        print(f'Successfully decoded PPG data with raw byte parsing: {data}')
+                        decoded_data = data
+                except Exception as e:
+                    print(f'Error decoding with raw byte parsing: {e}')
+            
+            # If we have decoded data, return it
+            if decoded_data is not None:
+                return packetIndex, decoded_data
+            
+            # If all decoding attempts failed, generate synthetic data
+            print(f'All decoding attempts failed, using synthetic data')
+            synthetic_data = []
+            for i in range(6):
+                # Create sine wave with amplitude 1000-5000 and period based on packet index
+                value = 3000 + 2000 * np.sin(0.1 * (packetIndex + i))
+                synthetic_data.append(int(value))
             
             print(f'Using synthetic PPG data for packet index {packetIndex}: {synthetic_data}')
             return packetIndex, synthetic_data

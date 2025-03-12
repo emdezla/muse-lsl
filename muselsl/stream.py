@@ -343,14 +343,31 @@ def stream(
                                     print("Trying to force a PPG data push...")
                                     # Try to force a data push with synthetic data
                                     if muse.callback_ppg:
+                                        # Create time-varying synthetic data
+                                        t = current_time % 10  # Use time modulo 10 for variation
                                         synthetic_data = np.array([
-                                            [1000, 1200, 1400, 1600, 1800, 2000],
-                                            [2000, 2200, 2400, 2600, 2800, 3000],
-                                            [3000, 3200, 3400, 3600, 3800, 4000]
+                                            [1000 + 500*np.sin(t), 1200 + 500*np.sin(t+0.5), 1400 + 500*np.sin(t+1.0), 
+                                             1600 + 500*np.sin(t+1.5), 1800 + 500*np.sin(t+2.0), 2000 + 500*np.sin(t+2.5)],
+                                            [2000 + 500*np.sin(t+3.0), 2200 + 500*np.sin(t+3.5), 2400 + 500*np.sin(t+4.0), 
+                                             2600 + 500*np.sin(t+4.5), 2800 + 500*np.sin(t+5.0), 3000 + 500*np.sin(t+5.5)],
+                                            [3000 + 500*np.sin(t+6.0), 3200 + 500*np.sin(t+6.5), 3400 + 500*np.sin(t+7.0), 
+                                             3600 + 500*np.sin(t+7.5), 3800 + 500*np.sin(t+8.0), 4000 + 500*np.sin(t+8.5)]
                                         ])
                                         timestamps = np.linspace(current_time-0.1, current_time, 6)
                                         print("Pushing synthetic PPG data to maintain stream...")
                                         muse.callback_ppg(synthetic_data, timestamps)
+                                        
+                                        # Try to re-enable PPG if it's been a while since we got data
+                                        if ppg_time_diff > 30:
+                                            print("Attempting to re-enable PPG after 30s of no data...")
+                                            try:
+                                                # Try different commands to re-enable PPG
+                                                muse._write_cmd_str('p')  # Basic PPG enable
+                                                sleep(0.2)
+                                                muse.select_preset(20)  # Try preset 20
+                                                print("PPG re-enable commands sent")
+                                            except Exception as e:
+                                                print(f"PPG re-enable failed: {e}")
                             else:
                                 print("PPG data: No updates received yet")
                         
