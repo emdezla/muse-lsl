@@ -217,7 +217,12 @@ class LSLViewer():
                 if timestamps and len(timestamps) > 0:
                     # Ensure timestamps is a 1D array
                     timestamps = np.atleast_1d(np.array(timestamps).flatten())
-
+                    
+                    # Debug print for incoming data
+                    print(f"Received {len(timestamps)} samples for {self.data_source}")
+                    if len(samples) > 0:
+                        print(f"Sample shape: {np.array(samples).shape}")
+                        print(f"First sample: {samples[0]}")
 
                     if self.dejitter:
                         #timestamps = np.float64(np.arange(len(timestamps)))
@@ -237,13 +242,26 @@ class LSLViewer():
                         
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
                         # We need to reshape to get separate x, y, z channels
-                        if len(samples) > 0 and samples.shape[1] == 3:  # Make sure we have 3 dimensions (x, y, z)
-                            # Reshape samples to match our data structure
-                            reshaped_samples = np.zeros((len(samples), 3))
-                            for i in range(len(samples)):
-                                reshaped_samples[i, 0] = samples[i, 0]  # X
-                                reshaped_samples[i, 1] = samples[i, 1]  # Y
-                                reshaped_samples[i, 2] = samples[i, 2]  # Z
+                        if len(samples) > 0:
+                            print(f"Processing {len(samples)} {self.data_source} samples")
+                            
+                            # Handle different possible shapes of incoming data
+                            if samples.ndim == 1:
+                                # Single sample case
+                                reshaped_samples = samples.reshape(1, -1)
+                            elif samples.ndim == 2 and samples.shape[1] == 3:
+                                # Normal case: multiple samples with x,y,z values
+                                reshaped_samples = samples
+                            elif samples.ndim == 3 and samples.shape[1] == 3 and samples.shape[2] == 1:
+                                # Handle case where samples might be 3D
+                                reshaped_samples = samples.reshape(samples.shape[0], 3)
+                            else:
+                                print(f"WARNING: Unexpected {self.data_source} data shape: {samples.shape}")
+                                # Try to make it work anyway
+                                reshaped_samples = samples.reshape(samples.shape[0], -1)[:, :3]
+                            
+                            print(f"Reshaped to: {reshaped_samples.shape}")
+                            print(f"Sample values: {reshaped_samples[0]}")
                             
                             self.data = np.vstack([self.data, reshaped_samples])
                             self.data = self.data[-self.n_samples:]
@@ -253,6 +271,7 @@ class LSLViewer():
                             
                             k += 1
                             if k == self.display_every:
+                                print(f"Updating {self.data_source} plot with {len(plot_data)} samples")
                                 # Update each axis plot
                                 if isinstance(self.axes, np.ndarray):
                                     for ii in range(3):
@@ -262,6 +281,10 @@ class LSLViewer():
                                         # Update line data
                                         self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
                                         self.lines[ii].set_ydata(current_data)
+                                        
+                                        # Print some values for debugging
+                                        if len(current_data) > 0:
+                                            print(f"{self.data_source} Axis {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
                                         
                                         # Dynamically adjust y-limits based on current data
                                         if len(current_data) > 0:
@@ -304,6 +327,14 @@ class LSLViewer():
                         
                         # For PPG, we have regular samples
                         if len(samples) > 0:
+                            print(f"Processing {len(samples)} PPG samples with shape {samples.shape}")
+                            print(f"First PPG sample: {samples[0]}")
+                            
+                            # Make sure samples are properly shaped
+                            if samples.ndim == 1:
+                                # Single sample case
+                                samples = samples.reshape(1, -1)
+                            
                             self.data = np.vstack([self.data, samples])
                             self.data = self.data[-self.n_samples:]
                         
@@ -312,12 +343,17 @@ class LSLViewer():
                         
                         k += 1
                         if k == self.display_every:
+                            print(f"Updating PPG plot with {len(plot_data)} samples")
                             # Update each PPG channel plot
                             if isinstance(self.axes, np.ndarray):
                                 for ii in range(min(3, self.n_chan)):
                                     # Get current data for this channel
                                     current_data = plot_data[::self.subsample, ii]
-                                    
+                                        
+                                    # Print some values for debugging
+                                    if len(current_data) > 0:
+                                        print(f"PPG Channel {ii}: min={np.min(current_data):.2f}, max={np.max(current_data):.2f}, mean={np.mean(current_data):.2f}")
+                                        
                                     # Update line data
                                     self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
                                     self.lines[ii].set_ydata(current_data)
@@ -393,6 +429,7 @@ class LSLViewer():
                             self.fig.canvas.draw()
                             k = 0
                 else:
+                    print(f"No {self.data_source} data received in this iteration")
                     sleep(0.2)
         except RuntimeError as e:
             raise
