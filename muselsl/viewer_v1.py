@@ -218,6 +218,9 @@ class LSLViewer():
             else:
                 labels = [f"Ch {i+1}" for i in range(channels)]
             
+            # Wait 5 seconds before computing the average
+            sleep(5)
+
             # Initialize lines
             for i, lbl in enumerate(labels[:channels]):
                 line, = axs[i].plot([], [], label=lbl)
