@@ -5,6 +5,7 @@ from shutil import which
 from sys import platform
 from time import time
 import logging
+import numpy as np
 
 import pygatt
 from pylsl import StreamInfo, StreamOutlet, local_clock

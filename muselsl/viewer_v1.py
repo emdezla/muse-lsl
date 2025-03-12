@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from scipy.signal import lfilter, lfilter_zi, firwin
-from time import sleep
+from time import sleep, time
 from pylsl import StreamInlet, resolve_byprop
 import seaborn as sns
 from threading import Thread, Lock
