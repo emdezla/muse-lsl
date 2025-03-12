@@ -8,14 +8,7 @@ from threading import Thread
 from .constants import VIEW_BUFFER, VIEW_SUBSAMPLE, LSL_SCAN_TIMEOUT, LSL_EEG_CHUNK
 
 
-def view(window, scale, refresh, figure, backend, version=1): -> None:
-    chunk_length = LSL_EEG_CHUNK
-    if data_source == "PPG":
-        chunk_length = LSL_PPG_CHUNK
-    if data_source == "ACC":
-        chunk_length = LSL_ACC_CHUNK
-    if data_source == "GYRO":
-        chunk_length = LSL_GYRO_CHUNK
+def view(window, scale, refresh, figure, backend, version=1):
     matplotlib.use(backend)
     sns.set(style="whitegrid")
 
