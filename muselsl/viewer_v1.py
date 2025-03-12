@@ -215,19 +215,27 @@ class LSLViewer():
                                                            max_samples=chunk_size)
 
                 if timestamps:
+                    # Ensure timestamps is a 1D array
+                    timestamps = np.array(timestamps)
+                    
                     if self.dejitter:
                         timestamps = np.float64(np.arange(len(timestamps)))
                         timestamps /= self.sfreq
                         timestamps += self.times[-1] + 1. / self.sfreq
+                    
+                    # Ensure both arrays have the same dimensions before concatenation
                     self.times = np.concatenate([self.times, timestamps])
                     self.n_samples = int(self.sfreq * self.window)
                     self.times = self.times[-self.n_samples:]
                     
                     # Process data based on data source
                     if self.data_source in ["ACC", "GYRO"]:
+                        # Convert samples to numpy array if it's not already
+                        samples = np.array(samples)
+                        
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
                         # We need to reshape to get separate x, y, z channels
-                        if samples.shape[1] == 3:  # Make sure we have 3 dimensions (x, y, z)
+                        if len(samples) > 0 and samples.shape[1] == 3:  # Make sure we have 3 dimensions (x, y, z)
                             # Reshape samples to match our data structure
                             reshaped_samples = np.zeros((len(samples), 3))
                             for i in range(len(samples)):
@@ -289,9 +297,13 @@ class LSLViewer():
                                 k = 0
                     
                     elif self.data_source == "PPG":
+                        # Convert samples to numpy array if it's not already
+                        samples = np.array(samples)
+                        
                         # For PPG, we have regular samples
-                        self.data = np.vstack([self.data, samples])
-                        self.data = self.data[-self.n_samples:]
+                        if len(samples) > 0:
+                            self.data = np.vstack([self.data, samples])
+                            self.data = self.data[-self.n_samples:]
                         
                         # No filtering for PPG data
                         plot_data = self.data
@@ -342,8 +354,12 @@ class LSLViewer():
                             k = 0
                     
                     else:  # EEG
-                        self.data = np.vstack([self.data, samples])
-                        self.data = self.data[-self.n_samples:]
+                        # Convert samples to numpy array if it's not already
+                        samples = np.array(samples)
+                        
+                        if len(samples) > 0:
+                            self.data = np.vstack([self.data, samples])
+                            self.data = self.data[-self.n_samples:]
                         
                         # Only apply filtering for EEG data
                         if hasattr(self, 'bf') and hasattr(self, 'af') and hasattr(self, 'filt_state'):
