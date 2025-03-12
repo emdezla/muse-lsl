@@ -166,48 +166,6 @@ class LSLViewer():
                 else:
                     # No data received
                     empty_count += 1
-                    
-                    # Process samples based on data type
-                    if self.data_source in ["ACC", "GYRO"]:
-                        # Ensure samples have the right shape
-                        if samples.ndim == 1:
-                            samples = samples.reshape(1, -1)
-                        
-                        # Just take the first 3 columns (X, Y, Z)
-                        if samples.shape[1] >= 3:
-                            samples = samples[:, :3]
-                    
-                    # Apply filtering for EEG data if needed
-                    if self.data_source == "EEG" and self.filt and hasattr(self, 'bf'):
-                        filt_samples, self.filt_state = lfilter(
-                            self.bf, self.af, samples, axis=0, zi=self.filt_state)
-                        samples = filt_samples
-                    
-                    # Add to buffer with thread safety
-                    with self.lock:
-                        for i, timestamp in enumerate(timestamps):
-                            if i < len(samples):
-                                # Calculate buffer position
-                                idx = self.buffer_idx
-                                
-                                # Store timestamp
-                                self.time_buffer[idx] = timestamp
-                                
-                                # Store sample data (transposed to match expected format)
-                                if samples.ndim == 1:
-                                    # Single sample case
-                                    self.data_buffer[0, idx] = samples[i]
-                                    # No debug output for PPG
-                                else:
-                                    # Multiple channel case
-                                    sample = samples[i]
-                                    for ch in range(min(self.n_chan, len(sample))):
-                                        self.data_buffer[ch, idx] = sample[ch]
-                                    
-                                    # No debug output for PPG
-                                
-                                # Move buffer index
-                                self.buffer_idx = (self.buffer_idx + 1) % self.buffer_size
                 
                 if not timestamps or len(timestamps) == 0:
                     # No data received, sleep a bit
