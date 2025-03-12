@@ -77,6 +77,16 @@ class Muse():
                 logger.info('Connecting to %s: %s...' % (self.name
                                                    if self.name else 'Muse',
                                                    self.address))
+                
+                # Check if device name is available to determine if PPG is supported
+                if self.name:
+                    print(f"Device name: {self.name}")
+                    if "Muse 2" in self.name:
+                        print("Detected Muse 2 device which supports PPG")
+                    elif "MuseS" in self.name:
+                        print("WARNING: Detected Muse S device - PPG support may be limited")
+                    else:
+                        print("WARNING: Device may not support PPG - PPG is only available on Muse 2")
                 if self.backend == 'gatt':
                     self.interface = self.interface or 'hci0'
                     self.adapter = pygatt.GATTToolBackend(self.interface)
@@ -555,19 +565,32 @@ class Muse():
     def _subscribe_ppg(self):
         try:
             """subscribe to ppg stream."""
+            print('Attempting to subscribe to PPG streams...')
             logger.info('Attempting to subscribe to PPG streams...')
+            
+            print(f'PPG1 UUID: {MUSE_GATT_ATTR_PPG1}')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG1, callback=self._handle_ppg)
+            print('Successfully subscribed to PPG1 stream')
             logger.info('Successfully subscribed to PPG1 stream')
+            
+            print(f'PPG2 UUID: {MUSE_GATT_ATTR_PPG2}')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG2, callback=self._handle_ppg)
+            print('Successfully subscribed to PPG2 stream')
             logger.info('Successfully subscribed to PPG2 stream')
+            
+            print(f'PPG3 UUID: {MUSE_GATT_ATTR_PPG3}')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG3, callback=self._handle_ppg)
+            print('Successfully subscribed to PPG3 stream')
             logger.info('Successfully subscribed to PPG3 stream')
+            
+            print('All PPG streams subscribed successfully')
             logger.info('All PPG streams subscribed successfully')
 
         except pygatt.exceptions.BLEError as error:
+            print(f'Failed to subscribe to PPG: {error}')
             logger.error(f'Failed to subscribe to PPG: {error}')
             raise Exception(
                 'PPG data is not available on this device. PPG is only available on Muse 2'
@@ -580,20 +603,30 @@ class Muse():
         wait until we get x and call the data callback
         """
         timestamp = self.time_func()
-        logger.debug(f'Received PPG data on handle: {handle}')
+        print(f'Received PPG data on handle: {handle}, data length: {len(data)}')
+        logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}')
+        
+        # Check if handle is in the expected range
+        if handle not in [56, 59, 62]:
+            print(f'WARNING: Unexpected PPG handle value: {handle}')
+            logger.warning(f'Unexpected PPG handle value: {handle}')
         
         index = int((handle - 56) / 3)
+        print(f'PPG index calculated: {index}')
         logger.debug(f'PPG index calculated: {index}')
         
         try:
             tm, d = self._unpack_ppg_channel(data)
+            print(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}')
             logger.debug(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}')
         except Exception as e:
-            logger.error(f'Error unpacking PPG data: {e}')
+            print(f'Error unpacking PPG data: {e}, data: {data.hex()}')
+            logger.error(f'Error unpacking PPG data: {e}, data: {data.hex()}')
             return
 
         if self.last_tm_ppg == 0:
             self.last_tm_ppg = tm - 1
+            print('First PPG packet received')
             logger.debug('First PPG packet received')
 
         self.data_ppg[index] = d
@@ -601,8 +634,10 @@ class Muse():
         
         # last data received
         if handle == 62:
+            print(f'Complete PPG sample received (handle 62), packet index: {tm}')
             logger.debug(f'Complete PPG sample received (handle 62), packet index: {tm}')
             if tm != self.last_tm_ppg + 1:
+                print(f"Missing PPG sample {tm} : {self.last_tm_ppg}")
                 logger.debug(f"Missing PPG sample {tm} : {self.last_tm_ppg}")
             self.last_tm_ppg = tm
 
@@ -619,9 +654,11 @@ class Muse():
 
             # push data
             if self.callback_ppg:
+                print(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}, data: {self.data_ppg}')
                 logger.debug(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}')
                 self.callback_ppg(self.data_ppg, timestamps)
             else:
+                print('PPG callback is None, data not being processed')
                 logger.warning('PPG callback is None, data not being processed')
 
             # reset sample
@@ -633,16 +670,19 @@ class Muse():
         samples with an x bit resolution.
         """
         try:
-            logger.debug(f'Unpacking PPG packet of length: {len(packet)}')
+            print(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
+            logger.debug(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
             aa = bitstring.Bits(bytes=packet)
             pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
             res = aa.unpack(pattern)
             packetIndex = res[0]
             data = res[1:]
+            print(f'PPG packet unpacked successfully: index={packetIndex}, data values={data}')
             logger.debug(f'PPG packet unpacked successfully: index={packetIndex}, data length={len(data)}')
             return packetIndex, data
         except Exception as e:
-            logger.error(f'Error in _unpack_ppg_channel: {e}')
+            print(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
+            logger.error(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
             # Re-raise to allow caller to handle
             raise
     

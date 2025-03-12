@@ -217,14 +217,16 @@ def stream(
                 outlet.push_sample(data[:, ii], timestamps[ii])
 
         def push_ppg_with_debug(data, timestamps):
-            print(f"Received PPG data with shape: {data.shape}")
+            print(f"Received PPG data with shape: {data.shape}, timestamps length: {len(timestamps)}")
             try:
                 for ii in range(data.shape[1]):
-                    print(f"Pushing PPG sample {ii}: {data[:, ii]}")
+                    print(f"Pushing PPG sample {ii}: {data[:, ii]}, timestamp: {timestamps[ii]}")
                     ppg_outlet.push_sample(data[:, ii], timestamps[ii])
-                print(f"Successfully pushed {data.shape[1]} PPG samples")
+                print(f"Successfully pushed {data.shape[1]} PPG samples to LSL stream")
             except Exception as e:
                 print(f"Error pushing PPG data: {e}")
+                import traceback
+                print(traceback.format_exc())
 
         push_eeg = partial(push, outlet=eeg_outlet) if not eeg_disabled else None
         push_ppg = push_ppg_with_debug if ppg_enabled else None
