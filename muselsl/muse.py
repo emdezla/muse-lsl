@@ -266,7 +266,8 @@ class Muse():
         """Keep streaming, sending 'k' command"""
         self._write_cmd_str('k')
 
-    def select_preset(self, preset=21):
+    #PRESET 61 IS NEEDED FOR PPG!!!!!!!
+    def select_preset(self, preset=61):
         """Set preset for headband configuration
 
         See details here https://articles.jaredcamins.com/figuring-out-bluetooth-low-energy-part-2-750565329a7d

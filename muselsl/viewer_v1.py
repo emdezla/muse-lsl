@@ -231,7 +231,7 @@ class LSLViewer():
                 elif self.data_source == "GYRO":
                     axs[i].set_ylim(-250, 250)
                 elif self.data_source == "PPG":
-                    axs[i].set_ylim(500, 6000)
+                    axs[i].set_ylim(-5000, 700000) 
             
             # Set fixed x-axis limits
             for ax in axs:

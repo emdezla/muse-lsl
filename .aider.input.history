@@ -798,3 +798,658 @@
 +
 +        plt.tight_layout()
 +        plt.show()
+
+# 2025-03-11 21:43:58.729449
++/read-only muselsl\record.py
+
+# 2025-03-11 21:44:14.168263
++/read-only muselsl\muse.py
+
+# 2025-03-11 21:44:26.937661
++/add muselsl\viewer_v1.py
+
+# 2025-03-11 21:46:53.465816
++The plot for data types ACC PPG and GYRO is not updating but I am sure that the streams are working because I am able to record data from record.py. Please updated viewer_v1.py to fix this problem and add terminal prints fro debigging reasons. For example, you can output in the terminal some of the values received from the stream
+
+# 2025-03-11 21:48:01.770811
++n
+
+# 2025-03-11 21:51:26.358411
++From the terminal output, it seems that the data is getting updated but the plot is still static. Please simplify the plot (remove subplots) and try to fix why it does not update. This is the putput in the terminal: First sample: [0.19439710676670074, -0.026611346751451492, -0.9816291332244873]
++Processing 1 ACC samples
++Reshaped to: (1, 3)
++Sample values: [ 0.19439711 -0.02661135 -0.98162913]
++Received 1 samples for ACC
++Sample shape: (1, 3)
++First sample: [0.19482435286045074, -0.024047868326306343, -0.9801642894744873]
++Processing 1 ACC samples
++Reshaped to: (1, 3)
++Sample values: [ 0.19482435 -0.02404787 -0.98016429]
++Received 1 samples for ACC
++Sample shape: (1, 3)
++First sample: [0.19445814192295074, -0.02893068455159664, -0.9796760082244873]
++Processing 1 ACC samples
++Reshaped to: (1, 3)
++Sample values: [ 0.19445814 -0.02893068 -0.97967601]
+
+# 2025-03-11 21:53:12.054630
++n
+
+# 2025-03-11 21:55:36.241629
++It seems to be working now :) Please do not change the scale of y axis online, just leave it fixed
+
+# 2025-03-11 21:56:16.839473
++d
+
+# 2025-03-11 22:00:53.649318
++Simplify even more the plots for ACC, GYRO and PPG. They seem to be lagging a bit. Also remove the terminal printing for debuGGING
+
+# 2025-03-11 22:03:53.269954
++Simplify even more the plotting update for ACC, GYRO, and PPG. I just want the raw data. No preprocessing with averages or similar stuff
+
+# 2025-03-11 22:05:25.663847
++/drop muselsl\muse.py muselsl\record.py
+
+# 2025-03-11 22:06:37.640862
++simplify even more. I dont want to see the data every 3 samples, i prefer every sample. I think the plot is doing weird things because of your processing. Just display the data as raw as possible when it is received for ACC, PPG and GYRO
+
+# 2025-03-11 22:08:18.875743
++n
+
+# 2025-03-11 22:09:58.040517
++I am tired of the plot not working. The signals are kind of moving even when the time has passed so, it is making me think that maybe there is a problem with the alignment of the timestamps. Please solve the issue. Let me share with you a previous code that was working def start_plotting(self):
++        """
++        Displays live plots for the chosen stream using matplotlib's FuncAnimation.
++        """
++        # For all data types, use subplots for each channel
++        fig, axs = plt.subplots(self.channels, 1, figsize=(10, 8), sharex=True)
++        # Ensure axs is always a list/array for consistent indexing
++        if self.channels == 1:
++            axs = [axs]
++
++        # Create line objects for blitting
++        lines = []
++        
++        # Set fixed x-axis limits for time window
++        time_window = 5  # Show only the last 5 seconds for all data types
++        
++        def update(_):
++            with self.lock:
++                idx = self.buffer_idx
++                # Use np.roll for more efficient circular buffer handling
++                t = np.roll(self.time_buffer, -idx)
++                d = np.roll(self.data_buffer, -idx, axis=1)
++            
++            # Filter data for the time window
++            if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
++                last_timestamp = t[-1]
++                mask = t >= (last_timestamp - time_window)
++                # Ensure we have at least some data points even if time window is not filled yet
++                if np.sum(mask) > 0:
++                    t_plot = t[mask]
++                    d_plot = d[:, mask]
++                else:
++                    # If no data in time window yet, use all available non-zero data
++                    non_zero_mask = t != 0
++                    t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
++                    d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((self.channels, 1))
++            else:
++                t_plot = np.array([0])
++                d_plot = np.zeros((self.channels, 1))
++
++            # Normalize time to show seconds from current time
++            if len(t_plot) > 0:
++                t_normalized = t_plot - (t_plot[-1] if t_plot[-1] != 0 else 0)
++            else:
++                t_normalized = np.array([0])
++
++            # Set channel labels based on the selected stream
++            if self.stream_key == "EEG":
++                labels = ["TP9", "AF7", "AF8", "TP10"]
++            elif self.stream_key == "ACC":
++                labels = ["Acc X", "Acc Y", "Acc Z"]
++            elif self.stream_key == "GYRO":
++                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
++            elif self.stream_key == "PPG":
++                labels = ["IR", "G", "R"]
++            else:
++                labels = [f"Ch {i+1}" for i in range(self.channels)]
++
++            if self.stream_key == "EEG":
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                        # Set fixed y-axis limits for EEG (typical range)
++                        axs[i].set_ylim(-1000, 1000)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        line.set_data(t_normalized, d_plot[i])
++                        
++                        # Dynamically adjust y-limits if data exceeds current view
++                        if len(d_plot[i]) > 0:
++                            data_min, data_max = np.min(d_plot[i]), np.max(d_plot[i])
++                            y_min, y_max = axs[i].get_ylim()
++                            
++                            if data_min < y_min or data_max > y_max:
++                                margin = (data_max - data_min) * 0.1
++                                new_min = min(y_min, data_min - margin)
++                                new_max = max(y_max, data_max + margin)
++                                axs[i].set_ylim(new_min, new_max)
++            
++            elif self.stream_key in ["PPG", "ACC", "GYRO"]:
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        # Get the signal data for this channel
++                        signal_data = d_plot[i]
++                        
++                        # Update the line data
++                        line.set_data(t_normalized, signal_data)
++                        
++                        # Dynamically adjust y-limits based on current data
++                        if len(signal_data) > 0 and np.any(signal_data != 0):
++                            data_min, data_max = np.min(signal_data), np.max(signal_data)
++                            data_range = max(data_max - data_min, 1.0)  # Avoid zero range
++                            
++                            # Center around the mean with padding
++                            avg_value = np.mean(signal_data)
++                            y_min = avg_value - data_range * 0.7
++                            y_max = avg_value + data_range * 0.7
++                            
++                            # Apply the new limits
++                            axs[i].set_ylim(y_min, y_max)
++            
++            return lines
++
++        # Set up the animation with blitting for better performance
++        self.anim = animation.FuncAnimation(
++            fig,
++            update,
++            interval=100,
++            blit=True,
++            save_count=200,
++            cache_frame_data=False
++        )
++
++        plt.tight_layout()
++        plt.show()
+
+# 2025-03-11 22:12:23.166231
++d
+
+# 2025-03-11 22:15:35.827263
++Excellent! The code is working now. However, I used to like the previous version of EEG plot. Can you rewrite the code so that EEG plot is as before but we maintain the new plots for ACC, PPG and GYRO
+
+# 2025-03-11 22:16:50.903660
++n
+
+# 2025-03-11 22:19:32.193750
++/drop 
+
+# 2025-03-11 22:19:36.310041
++/exit
+
+# 2025-03-11 22:19:58.889597
++/add muse.py
+
+# 2025-03-11 22:20:01.469895
++n
+
+# 2025-03-11 22:20:14.305237
++/add muselsl\muse.py 
+
+# 2025-03-11 22:20:34.824246
++/read-only muselsl\constants.py
+
+# 2025-03-11 22:20:57.577145
++/add muselsl\stream.py
+
+# 2025-03-11 22:21:48.489007
++I think the stream of PPG is not working but I dont know why or how. Can you include debugging messages for the stream of PPG so that I can understand where is the problem?
+
+# 2025-03-11 22:22:50.276581
++y
+
+# 2025-03-11 22:22:50.336733
++/run python -m muselsl.stream --ppg --log debug
+
+# 2025-03-11 22:22:50.338541
++/run python -m muselsl.stream --ppg --log debug
+
+# 2025-03-11 22:22:56.959092
++n
+
+# 2025-03-11 22:24:41.063643
++This is what I get: emili@Emilio-DELL-PC MINGW64 ~/procoding/muse-lsl (Experiment)
++$ python -m muselsl stream --ppg
++Searching for Muses, this may take up to 10 seconds...
++Found device MuseS-8734, MAC Address 00:55:DA:BB:87:34
++Note (minor): could not create multicast responder for address FF31:113D:6FDD:2C17:A643:FFE2:1BD1:3CD2 (failed with: bind: Intento de acceso a un socket no permitido por sus permisos de acceso)
++Note (minor): could not create multicast responder for address FF02:113D:6FDD:2C17:A643:FFE2:1BD1:3CD2 (failed with: bind: Intento de acceso a un socket no permitido por sus permisos de acceso)
++Note (minor): could not create multicast responder for address FF05:113D:6FDD:2C17:A643:FFE2:1BD1:3CD2 (failed with: bind: Intento de acceso a un socket no permitido por sus permisos de acceso)
++Setting up PPG stream...
++PPG stream setup complete with 3 channels at 64Hz
++Connected.
++Streaming EEG PPG...
+
+# 2025-03-11 22:29:45.972685
++n
+
+# 2025-03-11 22:31:52.600722
++viewer
+
+# 2025-03-11 22:32:53.925965
++n
+
+# 2025-03-11 22:34:16.468077
++/add muselsl\constants.py muselsl\muse.py muselsl\viewer_v1.py muselsl\stream.py
+
+# 2025-03-11 22:36:14.171618
++The graph for PPG is not displaying anything and I am worried that the script might not be receiving PPG data correctly. Please add debugging messages to see what am I receiving from the PPG stream when I call view(). This is what appears on the putput terminal when I call stream () $ python -m muselsl stream --ppg 
++Searching for Muses, this may take up to 10 seconds...
++Found device MuseS-8734, MAC Address 00:55:DA:BB:87:34
++Setting up PPG stream...
++PPG stream setup complete with 3 channels at 64Hz
++Device name: MuseS-8734
++WARNING: Detected Muse S device - PPG support may be limited
++Attempting to subscribe to PPG streams...
++PPG1 UUID: 273e000f-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG1 stream
++PPG2 UUID: 273e0010-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG2 stream
++PPG3 UUID: 273e0011-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG3 stream
++All PPG streams subscribed successfully
++Connected.
++Streaming EEG PPG...
+
+# 2025-03-11 22:37:31.662573
++y
+
+# 2025-03-11 22:39:09.936189
++n
+
+# 2025-03-11 22:41:08.757652
++That is what I get: PPG data buffer is empty (all zeros)
++No valid timestamps found for PPG data
+
+# 2025-03-11 22:42:28.902003
++y
+
+# 2025-03-11 22:44:10.079967
++n
+
+# 2025-03-11 22:44:15.261769
++/drop
+
+# 2025-03-11 22:44:19.145064
++/clear
+
+# 2025-03-11 22:58:31.377047
++$ python -m muselsl view -t PPG
++Starting viewer for PPG data, version 1
++Using viewer_v1 for PPG data
++Looking for a PPG stream...
++Found 1 PPG stream(s).
++Stream 1 details:
++  Name: Muse
++  Type: PPG
++  Channel count: 3
++  Sampling rate: 64.0
++  Source ID: Muse00:55:DA:BB:87:34
++Start acquiring data.
++
++                toggle filter : d
++                zoom out : /
++                zoom in : *
++                increase time scale : -
++                decrease time scale : +
++
++PPG data buffer is empty (all zeros)
++Inserting test data to verify plotting functionality
++Inserted test data with 100 points
++Plotting 640 PPG data points
++PPG data buffer is empty (all zeros)
++Inserting test data to verify plotting functionality
++Inserted test data with 100 points
++Plotting 640 PPG data points
++PPG data buffer is empty (all zeros)
++Inserting test data to verify plotting functionality
++Inserted test data with 100 points
++Plotting 640 PPG data points
++PPG data buffer is empty (all zeros)
++Inserting test data to verify plotting functionality
++Inserted test data with 100 points
++Plotting 640 PPG data points
+
+# 2025-03-11 22:58:54.582615
++n
+
+# 2025-03-11 23:00:47.670848
++/add muselsl\muse.py muselsl\viewer_v1.py muselsl\stream.py
+
+# 2025-03-11 23:00:59.798705
++I dont agree with you. I think the problem is in the receiving and the handling of the PPG stream 
+
+# 2025-03-11 23:02:37.285261
++n
+
+# 2025-03-11 23:04:29.031251
++/ask what should I get in the terminal if the code was working?
+
+# 2025-03-11 23:05:46.014887
++/ask when are the functions of handling and unpacking called for ppg stream? Are there some debugging prints on them? I think they are simply not being called
+
+# 2025-03-11 23:08:39.183106
++update the code accordingly. remove the check about the muse 2, my device is a newer muse s that actually has PPG capabilities
+
+# 2025-03-11 23:09:53.472673
++n
+
+# 2025-03-11 23:11:30.836251
++I dont see any message being displatyed after the streaming starts: emili@Emilio-DELL-PC MINGW64 ~/procoding/muse-lsl (Experiment)
++$ python -m muselsl stream --ppg 
++Searching for Muses, this may take up to 10 seconds...
++Found device MuseS-8734, MAC Address 00:55:DA:BB:87:34
++Setting up PPG stream...
++PPG stream setup complete with 3 channels at 64Hz
++=== PPG streaming is enabled, will attempt to subscribe ===
++Device: MuseS-8734, Address: 00:55:DA:BB:87:34
++Device name: MuseS-8734
++=== ATTEMPTING TO SUBSCRIBE TO PPG STREAMS ===
++Device address: 00:55:DA:BB:87:34, name: MuseS-8734
++PPG1 UUID: 273e000f-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG1 stream
++PPG2 UUID: 273e0010-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG2 stream
++PPG3 UUID: 273e0011-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG3 stream
++=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===
++Connected.
++Streaming EEG PPG...
++
+
+# 2025-03-11 23:12:29.517675
++n
+
+# 2025-03-11 23:13:47.526860
++/drop muselsl\viewer_v1.py
+
+# 2025-03-11 23:13:54.881893
++emili@Emilio-DELL-PC MINGW64 ~/procoding/muse-lsl (Experiment)
++$ python -m muselsl stream --ppg 
++Searching for Muses, this may take up to 10 seconds...
++Found device MuseS-8734, MAC Address 00:55:DA:BB:87:34
++
++=== STREAM SESSION DETAILS ===
++Device: MuseS-8734 (00:55:DA:BB:87:34)
++Backend: auto
++Data sources: EEG PPG
++================================
++
++Setting up PPG stream...
++PPG stream setup complete with 3 channels at 64Hz
++=== PPG streaming is enabled, will attempt to subscribe ===
++Device: MuseS-8734, Address: 00:55:DA:BB:87:34
++Device name: MuseS-8734
++=== ATTEMPTING TO SUBSCRIBE TO PPG STREAMS ===
++Device address: 00:55:DA:BB:87:34, name: MuseS-8734
++Attempting to enable PPG sensor...
++PPG enable command sent
++PPG1 UUID: 273e000f-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG1 stream
++PPG2 UUID: 273e0010-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG2 stream
++PPG3 UUID: 273e0011-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG3 stream
++=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===
++Connected.
++Streaming EEG PPG...
++
++=== TESTING PPG CALLBACK FUNCTION ===
++PPG callback is registered and will be tested
++Calling PPG callback with test data...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [1000 2000 3000]
++PPG data sample - Last values: [2000 3000 4000]
++Pushing PPG sample 0: [1000 2000 3000], timestamp: 1741749180.4062903
++Pushing PPG sample 5: [2000 3000 4000], timestamp: 1741749180.5062912
++Successfully pushed 6 PPG samples to LSL stream
++PPG callback test successful!
++=======================================
++
++
++=== STATUS UPDATE (after 10.1s) ===
++Connection active: 0.0s since last data
++PPG data: 10.2s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [1000 2000 3000]
++PPG data sample - Last values: [2000 3000 4000]
++Pushing PPG sample 0: [1000 2000 3000], timestamp: 1741749185.458506
++Pushing PPG sample 5: [2000 3000 4000], timestamp: 1741749185.558506
++Successfully pushed 6 PPG samples to LSL stream
++===============================
++
++
++=== STATUS UPDATE (after 20.1s) ===
++Connection active: 0.1s since last data
++PPG data: 20.2s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [1000 2000 3000]
++PPG data sample - Last values: [2000 3000 4000]
++Pushing PPG sample 0: [1000 2000 3000], timestamp: 1741749195.5057192
++Pushing PPG sample 5: [2000 3000 4000], timestamp: 1741749195.605719
++Successfully pushed 6 PPG samples to LSL stream
++===============================
++
++
++=== STATUS UPDATE (after 30.2s) ===
++Connection active: 0.0s since last data
++PPG data: 30.3s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [1000 2000 3000]
++PPG data sample - Last values: [2000 3000 4000]
++Pushing PPG sample 0: [1000 2000 3000], timestamp: 1741749205.5631676
++Pushing PPG sample 5: [2000 3000 4000], timestamp: 1741749205.6631675
++Successfully pushed 6 PPG samples to LSL stream
++===============================
+
+# 2025-03-11 23:15:11.422994
++y
+
+# 2025-03-11 23:15:48.603595
++n
+
+# 2025-03-11 23:23:26.226462
++ python -m muselsl stream --ppg 
++Searching for Muses, this may take up to 10 seconds...
++Found device MuseS-8734, MAC Address 00:55:DA:BB:87:34
++
++=== STREAM SESSION DETAILS ===
++Device: MuseS-8734 (00:55:DA:BB:87:34)
++Backend: auto
++Data sources: EEG PPG
++================================
++
++Setting up PPG stream...
++PPG stream setup complete with 3 channels at 64Hz
++=== PPG streaming is enabled, will attempt to subscribe ===
++Device: MuseS-8734, Address: 00:55:DA:BB:87:34
++Device name: MuseS-8734
++=== ATTEMPTING TO SUBSCRIBE TO PPG STREAMS ===
++Device address: 00:55:DA:BB:87:34, name: MuseS-8734
++Attempting to enable PPG sensor with multiple commands...
++Basic PPG enable command sent
++Trying preset 20 (enables PPG on some devices)
++Sending direct PPG enable command to control handle
++Direct PPG enable command sent
++PPG enable commands completed
++PPG1 UUID: 273e000f-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG1 stream
++PPG2 UUID: 273e0010-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG2 stream
++PPG3 UUID: 273e0011-4c4d-454d-96be-f03bac821358
++Successfully subscribed to PPG3 stream
++=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===
++Connected.
++Streaming EEG PPG...
++
++=== TESTING PPG CALLBACK FUNCTION ===
++PPG callback is registered and will be tested
++Calling PPG callback with test data...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [1000 2000 3000]
++PPG data sample - Last values: [2000 3000 4000]
++Pushing PPG sample 0: [1000 2000 3000], timestamp: 1741749729.7185757
++Pushing PPG sample 5: [2000 3000 4000], timestamp: 1741749729.818578
++Successfully pushed 6 PPG samples to LSL stream
++PPG callback test successful!
++=======================================
++
++
++=== STATUS UPDATE (after 10.1s) ===
++Connection active: 0.1s since last data
++PPG data: 11.4s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [ 506.96972612 2499.83653115 2503.36144314]
++PPG data sample - Last values: [2444.77701469 2591.90801788 4363.23898574]
++Pushing PPG sample 0: [ 506.96972612 2499.83653115 2503.36144314], timestamp: 1741749734.7795534  
++Pushing PPG sample 5: [2444.77701469 2591.90801788 4363.23898574], timestamp: 1741749734.8795533  
++Successfully pushed 6 PPG samples to LSL stream
++===============================
++
++
++=== STATUS UPDATE (after 20.1s) ===
++Connection active: 0.1s since last data
++PPG data: 21.5s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [ 512.02813739 2498.47215663 2501.00447296]
++PPG data sample - Last values: [2456.17576263 2577.27722938 4380.80897949]
++Pushing PPG sample 0: [ 512.02813739 2498.47215663 2501.00447296], timestamp: 1741749744.832177   
++Pushing PPG sample 5: [2456.17576263 2577.27722938 4380.80897949], timestamp: 1741749744.9321768  
++Successfully pushed 6 PPG samples to LSL stream
++===============================
++
++
++=== STATUS UPDATE (after 30.2s) ===
++Connection active: 0.1s since last data
++PPG data: 31.5s since last update
++WARNING: No PPG data received recently!
++Trying to force a PPG data push...
++Pushing synthetic PPG data to maintain stream...
++=== PUSH_PPG_WITH_DEBUG CALLED ===
++Received PPG data with shape: (3, 6), timestamps length: 6
++PPG data sample - First values: [ 519.29996059 2495.3043206  2500.00491755]
++PPG data sample - Last values: [2467.44585931 2562.2761846  4399.24072635]
++Pushing PPG sample 0: [ 519.29996059 2495.3043206  2500.00491755], timestamp: 1741749754.8911393  
++Pushing PPG sample 5: [2467.44585931 2562.2761846  4399.24072635], timestamp: 1741749754.9911392  
++Successfully pushed 6 PPG samples to LSL stream
++Attempting to re-enable PPG after 30s of no data...
++PPG re-enable commands sent
+
+# 2025-03-11 23:25:44.758877
++n
+
+# 2025-03-11 23:28:45.966921
++/add muselsl\viewer_v1.py 
+
+# 2025-03-11 23:29:04.040111
++remove all the debugging messeages from viewer_v1 related to the PPG problem
+
+# 2025-03-11 23:29:52.168116
++n
+
+# 2025-03-11 23:36:55.391572
++Please restore the original functions for PPG streams unpacking and handling
+
+# 2025-03-11 23:42:36.061308
++n
+
+# 2025-03-11 23:57:39.168042
++There is a problem with viewer_v1 now. Please fix the problem by restoring some of the old code $ python -m muselsl view -t EEG
++Starting viewer for EEG data, version 1
++Using viewer_v1 for EEG data
++Looking for a EEG stream...
++Found 1 EEG stream(s).
++Stream 1 details:
++  Name: Muse
++  Type: EEG
++  Channel count: 5
++  Sampling rate: 256.0
++  Source ID: Muse00:55:DA:BB:87:34
++Start acquiring data.
++
++                toggle filter : d
++                zoom out : /
++                zoom in : *
++                increase time scale : -
++                decrease time scale : +
++
++Error in update_buffer: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
++
+
+# 2025-03-11 23:58:07.484725
++n
+
+# 2025-03-11 23:58:42.104052
++still the same problem
+
+# 2025-03-12 00:11:28.812235
++/drop muselsl\muse.py muselsl\stream.py
+
+# 2025-03-12 00:11:45.428143
++update the y axis of ppg plot
+
+# 2025-03-12 00:12:12.267928
++/model chatgpt-4o-latest
+
+# 2025-03-12 00:12:24.590171
++update the y axis of ppg plot
