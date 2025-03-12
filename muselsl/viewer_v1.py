@@ -5,24 +5,34 @@ from time import sleep
 from pylsl import StreamInlet, resolve_byprop
 import seaborn as sns
 from threading import Thread
-from .constants import VIEW_BUFFER, VIEW_SUBSAMPLE, LSL_SCAN_TIMEOUT, LSL_EEG_CHUNK
+from .constants import VIEW_BUFFER, VIEW_SUBSAMPLE, LSL_SCAN_TIMEOUT, LSL_EEG_CHUNK, LSL_PPG_CHUNK, LSL_ACC_CHUNK, LSL_GYRO_CHUNK
 
 
-def view(window, scale, refresh, figure, backend, version=1):
+def view(window, scale, refresh, figure, backend, data_source="EEG"):
     matplotlib.use(backend)
     sns.set(style="whitegrid")
 
     figsize = np.int16(figure.split('x'))
 
-    print("Looking for an EEG stream...")
-    streams = resolve_byprop('type', 'EEG', timeout=LSL_SCAN_TIMEOUT)
+    print(f"Looking for a {data_source} stream...")
+    streams = resolve_byprop('type', data_source, timeout=LSL_SCAN_TIMEOUT)
 
     if len(streams) == 0:
-        raise(RuntimeError("Can't find EEG stream."))
+        raise(RuntimeError(f"Can't find {data_source} stream."))
     print("Start acquiring data.")
 
-    fig, axes = matplotlib.pyplot.subplots(1, 1, figsize=figsize, sharex=True)
-    lslv = LSLViewer(streams[0], fig, axes, window, scale)
+    # Create appropriate number of subplots based on data source
+    if data_source == "EEG":
+        fig, axes = matplotlib.pyplot.subplots(1, 1, figsize=figsize, sharex=True)
+        fig.suptitle('EEG Data', fontsize=16)
+    elif data_source == "PPG":
+        fig, axes = matplotlib.pyplot.subplots(3, 1, figsize=figsize, sharex=True)
+        fig.suptitle('PPG Data', fontsize=16)
+    elif data_source in ["ACC", "GYRO"]:
+        fig, axes = matplotlib.pyplot.subplots(3, 1, figsize=figsize, sharex=True)
+        fig.suptitle(f'{data_source} Data', fontsize=16)
+    
+    lslv = LSLViewer(streams[0], fig, axes, window, scale, data_source=data_source)
     fig.canvas.mpl_connect('close_event', lslv.stop)
 
     help_str = """
@@ -39,13 +49,27 @@ def view(window, scale, refresh, figure, backend, version=1):
 
 
 class LSLViewer():
-    def __init__(self, stream, fig, axes, window, scale, dejitter=True):
+    def __init__(self, stream, fig, axes, window, scale, dejitter=True, data_source="EEG"):
         """Init"""
         self.stream = stream
         self.window = window
         self.scale = scale
         self.dejitter = dejitter
-        self.inlet = StreamInlet(stream, max_chunklen=LSL_EEG_CHUNK)
+        self.data_source = data_source
+        
+        # Set chunk size based on data source
+        if data_source == "EEG":
+            chunk_size = LSL_EEG_CHUNK
+        elif data_source == "PPG":
+            chunk_size = LSL_PPG_CHUNK
+        elif data_source == "ACC":
+            chunk_size = LSL_ACC_CHUNK
+        elif data_source == "GYRO":
+            chunk_size = LSL_GYRO_CHUNK
+        else:
+            chunk_size = LSL_EEG_CHUNK  # Default
+            
+        self.inlet = StreamInlet(stream, max_chunklen=chunk_size)
         self.filt = True
         self.subsample = VIEW_SUBSAMPLE
 
@@ -59,7 +83,7 @@ class LSLViewer():
         ch = description.child('channels').first_child()
         ch_names = [ch.child_value('label')]
 
-        for i in range(self.n_chan):
+        for i in range(self.n_chan - 1):  # Subtract 1 because we already got the first channel
             ch = ch.next_sibling()
             ch_names.append(ch.child_value('label'))
 
@@ -73,27 +97,88 @@ class LSLViewer():
 
         sns.despine(left=True)
 
-        self.data = np.zeros((self.n_samples, self.n_chan))
+        # Initialize data arrays based on data source
         self.times = np.arange(-self.window, 0, 1. / self.sfreq)
-        impedances = np.std(self.data, axis=0)
-        lines = []
-
-        for ii in range(self.n_chan):
-            line, = axes.plot(self.times[::self.subsample],
-                              self.data[::self.subsample, ii] - ii, lw=1)
-            lines.append(line)
-        self.lines = lines
-
-        axes.set_ylim(-self.n_chan + 0.5, 0.5)
-        ticks = np.arange(0, -self.n_chan, -1)
-
-        axes.set_xlabel('Time (s)')
-        axes.xaxis.grid(False)
-        axes.set_yticks(ticks)
-
-        ticks_labels = ['%s - %.1f' % (ch_names[ii], impedances[ii])
-                        for ii in range(self.n_chan)]
-        axes.set_yticklabels(ticks_labels)
+        
+        if self.data_source == "EEG":
+            self.data = np.zeros((self.n_samples, self.n_chan))
+            impedances = np.std(self.data, axis=0)
+            lines = []
+            
+            for ii in range(self.n_chan):
+                line, = self.axes.plot(self.times[::self.subsample],
+                                  self.data[::self.subsample, ii] - ii, lw=1)
+                lines.append(line)
+            self.lines = lines
+            
+            self.axes.set_ylim(-self.n_chan + 0.5, 0.5)
+            ticks = np.arange(0, -self.n_chan, -1)
+            
+            self.axes.set_xlabel('Time (s)')
+            self.axes.xaxis.grid(False)
+            self.axes.set_yticks(ticks)
+            
+            ticks_labels = ['%s - %.1f' % (self.ch_names[ii], impedances[ii])
+                            for ii in range(self.n_chan)]
+            self.axes.set_yticklabels(ticks_labels)
+            
+        elif self.data_source == "PPG":
+            # For PPG, we have 3 channels
+            self.data = np.zeros((self.n_samples, self.n_chan))
+            lines = []
+            
+            # Create a separate subplot for each PPG channel
+            if isinstance(self.axes, np.ndarray):
+                for ii in range(min(3, self.n_chan)):
+                    line, = self.axes[ii].plot(self.times[::self.subsample],
+                                          self.data[::self.subsample, ii], lw=1)
+                    lines.append(line)
+                    self.axes[ii].set_ylabel(f'{self.ch_names[ii]} (a.u.)')
+                    self.axes[ii].set_xlabel('Time (s)' if ii == 2 else '')
+                    self.axes[ii].set_ylim(0, self.scale * 10)  # PPG values are typically higher
+            else:
+                # Fallback to single plot if axes is not an array
+                for ii in range(min(3, self.n_chan)):
+                    line, = self.axes.plot(self.times[::self.subsample],
+                                      self.data[::self.subsample, ii], lw=1, 
+                                      label=f'{self.ch_names[ii]}')
+                    lines.append(line)
+                self.axes.set_ylabel('Amplitude (a.u.)')
+                self.axes.set_xlabel('Time (s)')
+                self.axes.legend()
+                
+            self.lines = lines
+            
+        elif self.data_source in ["ACC", "GYRO"]:
+            # For ACC and GYRO, we have 3 axes (X, Y, Z)
+            self.data = np.zeros((self.n_samples, 3))  # X, Y, Z
+            lines = []
+            
+            # Labels for axes
+            axis_labels = ['X', 'Y', 'Z']
+            y_unit = 'g' if self.data_source == "ACC" else 'deg/s'
+            
+            # Create a separate subplot for each axis
+            if isinstance(self.axes, np.ndarray):
+                for ii in range(3):
+                    line, = self.axes[ii].plot(self.times[::self.subsample],
+                                          self.data[::self.subsample, ii], lw=1)
+                    lines.append(line)
+                    self.axes[ii].set_ylabel(f'{axis_labels[ii]} ({y_unit})')
+                    self.axes[ii].set_xlabel('Time (s)' if ii == 2 else '')
+                    self.axes[ii].set_ylim(-self.scale / 10, self.scale / 10)  # ACC/GYRO values are typically smaller
+            else:
+                # Fallback to single plot if axes is not an array
+                for ii in range(3):
+                    line, = self.axes.plot(self.times[::self.subsample],
+                                      self.data[::self.subsample, ii], lw=1, 
+                                      label=f'{axis_labels[ii]}')
+                    lines.append(line)
+                self.axes.set_ylabel(f'Amplitude ({y_unit})')
+                self.axes.set_xlabel('Time (s)')
+                self.axes.legend()
+                
+            self.lines = lines
 
         self.display_every = int(0.2 / (12 / self.sfreq))
 
@@ -109,8 +194,20 @@ class LSLViewer():
         k = 0
         try:
             while self.started:
+                # Get chunk size based on data source
+                if self.data_source == "EEG":
+                    chunk_size = LSL_EEG_CHUNK
+                elif self.data_source == "PPG":
+                    chunk_size = LSL_PPG_CHUNK
+                elif self.data_source == "ACC":
+                    chunk_size = LSL_ACC_CHUNK
+                elif self.data_source == "GYRO":
+                    chunk_size = LSL_GYRO_CHUNK
+                else:
+                    chunk_size = LSL_EEG_CHUNK  # Default
+                
                 samples, timestamps = self.inlet.pull_chunk(timeout=1.0,
-                                                            max_samples=LSL_EEG_CHUNK)
+                                                           max_samples=chunk_size)
 
                 if timestamps:
                     if self.dejitter:
@@ -120,35 +217,105 @@ class LSLViewer():
                     self.times = np.concatenate([self.times, timestamps])
                     self.n_samples = int(self.sfreq * self.window)
                     self.times = self.times[-self.n_samples:]
-                    self.data = np.vstack([self.data, samples])
-                    self.data = self.data[-self.n_samples:]
-                    filt_samples, self.filt_state = lfilter(
-                        self.bf, self.af,
-                        samples,
-                        axis=0, zi=self.filt_state)
-                    self.data_f = np.vstack([self.data_f, filt_samples])
-                    self.data_f = self.data_f[-self.n_samples:]
-                    k += 1
-                    if k == self.display_every:
-
-                        if self.filt:
-                            plot_data = self.data_f
-                        elif not self.filt:
-                            plot_data = self.data - self.data.mean(axis=0)
-                        for ii in range(self.n_chan):
-                            self.lines[ii].set_xdata(self.times[::self.subsample] -
-                                                     self.times[-1])
-                            self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
-                                                     self.scale - ii)
+                    
+                    # Process data based on data source
+                    if self.data_source in ["ACC", "GYRO"]:
+                        # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
+                        # We need to reshape to get separate x, y, z channels
+                        if samples.shape[1] == 3:  # Make sure we have 3 dimensions (x, y, z)
+                            # Reshape samples to match our data structure
+                            reshaped_samples = np.zeros((len(samples), 3))
+                            for i in range(len(samples)):
+                                reshaped_samples[i, 0] = samples[i, 0]  # X
+                                reshaped_samples[i, 1] = samples[i, 1]  # Y
+                                reshaped_samples[i, 2] = samples[i, 2]  # Z
+                            
+                            self.data = np.vstack([self.data, reshaped_samples])
+                            self.data = self.data[-self.n_samples:]
+                            
+                            # No filtering for ACC/GYRO data
+                            plot_data = self.data
+                            
+                            k += 1
+                            if k == self.display_every:
+                                # Update each axis plot
+                                if isinstance(self.axes, np.ndarray):
+                                    for ii in range(3):
+                                        self.lines[ii].set_xdata(self.times[::self.subsample] -
+                                                                self.times[-1])
+                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
+                                                                (self.scale / 10))
+                                        self.axes[ii].set_xlim(-self.window, 0)
+                                else:
+                                    # Single plot case
+                                    for ii in range(3):
+                                        self.lines[ii].set_xdata(self.times[::self.subsample] -
+                                                                self.times[-1])
+                                        self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
+                                                                (self.scale / 10))
+                                    self.axes.set_xlim(-self.window, 0)
+                                
+                                self.fig.canvas.draw()
+                                k = 0
+                    
+                    elif self.data_source == "PPG":
+                        # For PPG, we have regular samples
+                        self.data = np.vstack([self.data, samples])
+                        self.data = self.data[-self.n_samples:]
+                        
+                        # No filtering for PPG data
+                        plot_data = self.data
+                        
+                        k += 1
+                        if k == self.display_every:
+                            # Update each PPG channel plot
+                            if isinstance(self.axes, np.ndarray):
+                                for ii in range(min(3, self.n_chan)):
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] -
+                                                            self.times[-1])
+                                    self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
+                                    self.axes[ii].set_xlim(-self.window, 0)
+                            else:
+                                # Single plot case
+                                for ii in range(min(3, self.n_chan)):
+                                    self.lines[ii].set_xdata(self.times[::self.subsample] -
+                                                            self.times[-1])
+                                    self.lines[ii].set_ydata(plot_data[::self.subsample, ii])
+                                self.axes.set_xlim(-self.window, 0)
+                            
+                            self.fig.canvas.draw()
+                            k = 0
+                    
+                    else:  # EEG
+                        self.data = np.vstack([self.data, samples])
+                        self.data = self.data[-self.n_samples:]
+                        filt_samples, self.filt_state = lfilter(
+                            self.bf, self.af,
+                            samples,
+                            axis=0, zi=self.filt_state)
+                        self.data_f = np.vstack([self.data_f, filt_samples])
+                        self.data_f = self.data_f[-self.n_samples:]
+                        k += 1
+                        if k == self.display_every:
+                            if self.filt:
+                                plot_data = self.data_f
+                            elif not self.filt:
+                                plot_data = self.data - self.data.mean(axis=0)
+                            
+                            for ii in range(self.n_chan):
+                                self.lines[ii].set_xdata(self.times[::self.subsample] -
+                                                        self.times[-1])
+                                self.lines[ii].set_ydata(plot_data[::self.subsample, ii] /
+                                                        self.scale - ii)
+                                
                             impedances = np.std(plot_data, axis=0)
-
-                        ticks_labels = ['%s - %.2f' % (self.ch_names[ii],
-                                                       impedances[ii])
-                                        for ii in range(self.n_chan)]
-                        self.axes.set_yticklabels(ticks_labels)
-                        self.axes.set_xlim(-self.window, 0)
-                        self.fig.canvas.draw()
-                        k = 0
+                            ticks_labels = ['%s - %.2f' % (self.ch_names[ii],
+                                                        impedances[ii])
+                                            for ii in range(self.n_chan)]
+                            self.axes.set_yticklabels(ticks_labels)
+                            self.axes.set_xlim(-self.window, 0)
+                            self.fig.canvas.draw()
+                            k = 0
                 else:
                     sleep(0.2)
         except RuntimeError as e:
@@ -168,7 +335,10 @@ class LSLViewer():
             if self.window > 1:
                 self.window -= 1
         elif event.key == 'd':
-            self.filt = not(self.filt)
+            # Only toggle filter for EEG data
+            if self.data_source == "EEG":
+                self.filt = not(self.filt)
+                print(f"Filtering {'enabled' if self.filt else 'disabled'}")
 
     def start(self):
         self.started = True
