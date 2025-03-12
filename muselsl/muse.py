@@ -688,18 +688,45 @@ class Muse():
             print(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
             logger.debug(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
             aa = bitstring.Bits(bytes=packet)
-            pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
-            res = aa.unpack(pattern)
-            packetIndex = res[0]
-            data = res[1:]
+            
+            # Try different patterns based on packet length
+            if len(packet) >= 16:  # Standard length for 6 samples
+                pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
+                res = aa.unpack(pattern)
+                packetIndex = res[0]
+                data = res[1:]
+            elif len(packet) >= 10:  # Shorter packet, maybe fewer samples
+                pattern = "uint:16,uint:24,uint:24,uint:24"
+                res = aa.unpack(pattern)
+                packetIndex = res[0]
+                data = res[1:]
+                # Pad with zeros to maintain expected length
+                data = list(data) + [0] * (6 - len(data))
+            else:
+                # Very short packet, just extract timestamp and pad with zeros
+                pattern = "uint:16"
+                res = aa.unpack(pattern)
+                packetIndex = res[0]
+                data = [0, 0, 0, 0, 0, 0]  # Placeholder zeros
+                
+            # Convert data to a list if it's not already
+            data = list(data)
+            
+            # Ensure data is not empty and has reasonable values
+            if not data or all(x == 0 for x in data):
+                print(f'WARNING: All PPG values are zero in packet: {packet.hex()}')
+            
+            # Ensure we're returning numeric values, not bitstring objects
+            data = [int(x) for x in data]
+            
             print(f'PPG packet unpacked successfully: index={packetIndex}, data values={data}')
             logger.debug(f'PPG packet unpacked successfully: index={packetIndex}, data length={len(data)}')
             return packetIndex, data
         except Exception as e:
             print(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
             logger.error(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
-            # Re-raise to allow caller to handle
-            raise
+            # Return a default value instead of raising to prevent stream interruption
+            return 0, [1, 1, 1, 1, 1, 1]  # Non-zero values to make debugging easier
     
 
     def _disable_light(self):

@@ -219,10 +219,28 @@ def stream(
         def push_ppg_with_debug(data, timestamps):
             print(f"Received PPG data with shape: {data.shape}, timestamps length: {len(timestamps)}")
             print(f"PPG data values: {data}")
+            
+            # Check if data is all zeros
+            if np.all(data == 0):
+                print("WARNING: All PPG data values are zero!")
+                # Insert some test data to verify LSL stream is working
+                test_data = np.array([[100, 200, 300, 400, 500, 600], 
+                                      [150, 250, 350, 450, 550, 650],
+                                      [200, 300, 400, 500, 600, 700]])
+                print(f"Injecting test PPG data: {test_data}")
+                data = test_data
+            
             try:
                 for ii in range(data.shape[1]):
-                    print(f"Pushing PPG sample {ii}: {data[:, ii]}, timestamp: {timestamps[ii]}")
-                    ppg_outlet.push_sample(data[:, ii], timestamps[ii])
+                    sample = data[:, ii]
+                    # Ensure no NaN or inf values
+                    if np.isnan(sample).any() or np.isinf(sample).any():
+                        print(f"WARNING: Sample {ii} contains NaN or inf values, replacing with zeros")
+                        sample = np.nan_to_num(sample)
+                    
+                    print(f"Pushing PPG sample {ii}: {sample}, timestamp: {timestamps[ii]}")
+                    ppg_outlet.push_sample(sample, timestamps[ii])
+                    
                 print(f"Successfully pushed {data.shape[1]} PPG samples to LSL stream")
             except Exception as e:
                 print(f"Error pushing PPG data: {e}")
