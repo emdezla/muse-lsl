@@ -224,79 +224,12 @@ def stream(
             for ii in range(data.shape[1]):
                 outlet.push_sample(data[:, ii], timestamps[ii])
 
-        def push_ppg_with_debug(data, timestamps):
-            print(f"=== PUSH_PPG_WITH_DEBUG CALLED ===")
-            print(f"Received PPG data with shape: {data.shape}, timestamps length: {len(timestamps)}")
-            
-            # Check if data is all zeros or very small values
-            if np.all(np.abs(data) < 1.0):
-                print("WARNING: All PPG data values are zero or very small!")
-                # Generate synthetic data that changes over time to create a visible pattern
-                current_time = time()
-                base_values = np.array([
-                    [1000, 1200, 1400, 1600, 1800, 2000],
-                    [2000, 2200, 2400, 2600, 2800, 3000],
-                    [3000, 3200, 3400, 3600, 3800, 4000]
-                ])
-                
-                # Add sine wave modulation based on current time
-                modulation = 500 * np.sin(np.arange(6) * 0.5 + current_time)
-                test_data = np.zeros_like(data)
-                for i in range(3):
-                    test_data[i] = base_values[i] + modulation
-                
-                print(f"Injecting synthetic PPG data with time-varying pattern")
-                data = test_data
-            
-            # Print a sample of the data (first and last values)
-            print(f"PPG data sample - First values: {data[:, 0] if data.shape[1] > 0 else 'empty'}")
-            print(f"PPG data sample - Last values: {data[:, -1] if data.shape[1] > 0 else 'empty'}")
-            
-            try:
-                # Ensure data dimensions match expectations
-                if data.shape[0] != MUSE_NB_PPG_CHANNELS:
-                    print(f"WARNING: PPG data has {data.shape[0]} channels, expected {MUSE_NB_PPG_CHANNELS}")
-                    # Resize data if needed
-                    if data.shape[0] < MUSE_NB_PPG_CHANNELS:
-                        # Add missing channels with synthetic data
-                        missing_channels = MUSE_NB_PPG_CHANNELS - data.shape[0]
-                        synthetic_data = np.zeros((missing_channels, data.shape[1]))
-                        for i in range(missing_channels):
-                            synthetic_data[i] = 1000 * (i + 1) + 500 * np.sin(np.arange(data.shape[1]) * 0.1)
-                        data = np.vstack((data, synthetic_data))
-                    else:
-                        # Truncate extra channels
-                        data = data[:MUSE_NB_PPG_CHANNELS]
-                
-                # Process each sample
-                for ii in range(data.shape[1]):
-                    sample = data[:, ii]
-                    
-                    # Ensure no NaN or inf values
-                    if np.isnan(sample).any() or np.isinf(sample).any():
-                        print(f"WARNING: Sample {ii} contains NaN or inf values, replacing with reasonable values")
-                        # Replace with values that follow a pattern based on channel index
-                        for ch in range(len(sample)):
-                            if np.isnan(sample[ch]) or np.isinf(sample[ch]):
-                                sample[ch] = 1000 * (ch + 1)
-                    
-                    # Clip extreme values
-                    sample = np.clip(sample, 0, 10000)
-                    
-                    # Only print details for first and last samples to avoid log spam
-                    if ii == 0 or ii == data.shape[1]-1:
-                        print(f"Pushing PPG sample {ii}: {sample}, timestamp: {timestamps[ii]}")
-                    
-                    ppg_outlet.push_sample(sample, timestamps[ii])
-                
-                print(f"Successfully pushed {data.shape[1]} PPG samples to LSL stream")
-            except Exception as e:
-                print(f"Error pushing PPG data: {e}")
-                import traceback
-                print(traceback.format_exc())
+        def push_ppg(data, timestamps):
+            for ii in range(data.shape[1]):
+                ppg_outlet.push_sample(data[:, ii], timestamps[ii])
 
         push_eeg = partial(push, outlet=eeg_outlet) if not eeg_disabled else None
-        push_ppg = push_ppg_with_debug if ppg_enabled else None
+        push_ppg = push_ppg if ppg_enabled else None
         push_acc = partial(push, outlet=acc_outlet) if acc_enabled else None
         push_gyro = partial(push, outlet=gyro_outlet) if gyro_enabled else None
 
@@ -319,77 +252,8 @@ def stream(
             print("Streaming%s%s%s%s..." %
                 (eeg_string, ppg_string, acc_string, gyro_string))
 
-            # Add a periodic status check
-            last_status_time = time_func()
-            connection_start_time = time_func()
-            
             while time_func() - muse.last_timestamp < AUTO_DISCONNECT_DELAY:
                 try:
-                    current_time = time_func()
-                    
-                    # Print status update every 10 seconds
-                    if current_time - last_status_time > 10:
-                        elapsed_time = current_time - connection_start_time
-                        print(f"\n=== STATUS UPDATE (after {elapsed_time:.1f}s) ===")
-                        print(f"Connection active: {time_func() - muse.last_timestamp:.1f}s since last data")
-                        
-                        # Check if we're receiving PPG data
-                        if ppg_enabled:
-                            if hasattr(muse, 'last_ppg_push_time'):
-                                ppg_time_diff = current_time - muse.last_ppg_push_time
-                                print(f"PPG data: {ppg_time_diff:.1f}s since last update")
-                                if ppg_time_diff > 5:
-                                    print("WARNING: No PPG data received recently!")
-                                    print("Trying to force a PPG data push...")
-                                    # Try to force a data push with synthetic data
-                                    if muse.callback_ppg:
-                                        # Create time-varying synthetic data
-                                        t = current_time % 10  # Use time modulo 10 for variation
-                                        synthetic_data = np.array([
-                                            [1000 + 500*np.sin(t), 1200 + 500*np.sin(t+0.5), 1400 + 500*np.sin(t+1.0), 
-                                             1600 + 500*np.sin(t+1.5), 1800 + 500*np.sin(t+2.0), 2000 + 500*np.sin(t+2.5)],
-                                            [2000 + 500*np.sin(t+3.0), 2200 + 500*np.sin(t+3.5), 2400 + 500*np.sin(t+4.0), 
-                                             2600 + 500*np.sin(t+4.5), 2800 + 500*np.sin(t+5.0), 3000 + 500*np.sin(t+5.5)],
-                                            [3000 + 500*np.sin(t+6.0), 3200 + 500*np.sin(t+6.5), 3400 + 500*np.sin(t+7.0), 
-                                             3600 + 500*np.sin(t+7.5), 3800 + 500*np.sin(t+8.0), 4000 + 500*np.sin(t+8.5)]
-                                        ])
-                                        timestamps = np.linspace(current_time-0.1, current_time, 6)
-                                        print("Pushing synthetic PPG data to maintain stream...")
-                                        muse.callback_ppg(synthetic_data, timestamps)
-                                        
-                                        # Try to re-enable PPG if it's been a while since we got data
-                                        if ppg_time_diff > 30:
-                                            print("Attempting to re-enable PPG after 30s of no data...")
-                                            try:
-                                                # Try different commands to re-enable PPG
-                                                if muse.name and "MuseS" in muse.name:
-                                                    print("Using Muse S specific re-enable sequence")
-                                                    # First try to reset the device's PPG system
-                                                    muse._write_cmd_str('h')  # Stop streaming
-                                                    sleep(0.5)
-                                                    muse._write_cmd_str('p')  # PPG enable
-                                                    sleep(0.2)
-                                                    muse.select_preset(20)  # Try preset 20
-                                                    sleep(0.2)
-                                                    muse._write_cmd_str('d')  # Resume streaming
-                                                else:
-                                                    muse._write_cmd_str('p')  # Basic PPG enable
-                                                    sleep(0.2)
-                                                    muse.select_preset(20)  # Try preset 20
-                                                print("PPG re-enable commands sent")
-                                                
-                                                # Print debug info about PPG handles
-                                                if hasattr(muse, 'ppg_handles_seen'):
-                                                    print(f"PPG handles seen during session: {sorted(muse.ppg_handles_seen)}")
-                                                
-                                            except Exception as e:
-                                                print(f"PPG re-enable failed: {e}")
-                            else:
-                                print("PPG data: No updates received yet")
-                        
-                        print("===============================\n")
-                        last_status_time = current_time
-                    
                     backends.sleep(1)
                 except KeyboardInterrupt:
                     muse.stop()

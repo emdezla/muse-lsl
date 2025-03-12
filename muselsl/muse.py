@@ -562,131 +562,13 @@ class Muse():
 
 
     def _subscribe_ppg(self):
-        try:
-            """subscribe to ppg stream."""
-            print('=== ATTEMPTING TO SUBSCRIBE TO PPG STREAMS ===')
-            print(f'Device address: {self.address}, name: {self.name}')
-            logger.info('Attempting to subscribe to PPG streams...')
-            
-            # Initialize a timestamp for the last PPG push
-            self.last_ppg_push_time = self.time_func()
-            
-            # Try to enable PPG sensor with multiple commands (different devices use different commands)
-            try:
-                print("Attempting to enable PPG sensor with multiple commands...")
-                
-                # For Muse S, try specific commands known to work
-                if self.name and "MuseS" in self.name:
-                    print("Detected Muse S device, using specific PPG enable sequence")
-                    
-                    # First, try preset 21 (default)
-                    self.select_preset(21)
-                    sleep(0.5)
-                    
-                    # Send 'p' command to enable PPG
-                    self._write_cmd_str('p')
-                    print("Sent 'p' command to enable PPG")
-                    sleep(0.5)
-                    
-                    # Try preset 20 which is known to enable PPG on some devices
-                    print("Trying preset 20 (enables PPG on Muse S)")
-                    self.select_preset(20)
-                    sleep(0.5)
-                    
-                    # Send specific PPG enable command for Muse S
-                    print("Sending Muse S specific PPG enable command")
-                    self._write_cmd([0x02, 0x70, 0x0a])  # 'p' command in raw format
-                    sleep(0.5)
-                    
-                    # Try additional commands for Muse S
-                    try:
-                        # These are specific commands that might enable PPG on Muse S
-                        print("Sending additional Muse S PPG commands")
-                        self._write_cmd_str('dp')  # 'd' to resume streaming + 'p' for PPG
-                        sleep(0.2)
-                        self._write_cmd([0x03, 0x70, 0x32, 0x0a])  # 'p2' command
-                        print("Additional Muse S commands sent")
-                    except Exception as e:
-                        print(f"Additional Muse S commands failed: {e}")
-                else:
-                    # Generic commands for other Muse models
-                    self._write_cmd_str('p')  # Basic PPG enable
-                    print("Basic PPG enable command sent")
-                    sleep(0.5)
-                    
-                    # Try preset 20 which is known to enable PPG on some devices
-                    print("Trying preset 20 (enables PPG on some devices)")
-                    self.select_preset(20)
-                    sleep(0.5)
-                
-                # Try a direct command to the PPG control handle
-                try:
-                    print("Sending direct PPG enable command to control handle")
-                    # This is a command to enable PPG sampling
-                    ppg_enable_cmd = [0x02, 0x73, 0x0a]  # 's' command with specific parameters
-                    self._write_cmd(ppg_enable_cmd)
-                    print("Direct PPG enable command sent")
-                except Exception as e:
-                    print(f"Direct PPG command failed: {e}")
-                
-                print("PPG enable commands completed")
-            except Exception as e:
-                print(f"Note: Some PPG enable commands failed: {e} (this may be normal)")
-            
-            print(f'PPG1 UUID: {MUSE_GATT_ATTR_PPG1}')
-            self.device.subscribe(
-                MUSE_GATT_ATTR_PPG1, callback=self._handle_ppg)
-            print('Successfully subscribed to PPG1 stream')
-            logger.info('Successfully subscribed to PPG1 stream')
-            
-            print(f'PPG2 UUID: {MUSE_GATT_ATTR_PPG2}')
-            self.device.subscribe(
-                MUSE_GATT_ATTR_PPG2, callback=self._handle_ppg)
-            print('Successfully subscribed to PPG2 stream')
-            logger.info('Successfully subscribed to PPG2 stream')
-            
-            print(f'PPG3 UUID: {MUSE_GATT_ATTR_PPG3}')
-            self.device.subscribe(
-                MUSE_GATT_ATTR_PPG3, callback=self._handle_ppg)
-            print('Successfully subscribed to PPG3 stream')
-            logger.info('Successfully subscribed to PPG3 stream')
-            
-            print('=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===')
-            logger.info('All PPG streams subscribed successfully')
-            
-            # Schedule a test message to verify callback is working
-            def send_test_message():
-                print("\n=== TESTING PPG CALLBACK FUNCTION ===")
-                if hasattr(self, 'callback_ppg') and self.callback_ppg:
-                    print("PPG callback is registered and will be tested")
-                    # Create synthetic test data
-                    test_data = np.array([
-                        [1000, 1200, 1400, 1600, 1800, 2000],
-                        [2000, 2200, 2400, 2600, 2800, 3000],
-                        [3000, 3200, 3400, 3600, 3800, 4000]
-                    ])
-                    timestamps = np.linspace(self.time_func()-0.1, self.time_func(), 6)
-                    
-                    try:
-                        print("Calling PPG callback with test data...")
-                        self.callback_ppg(test_data, timestamps)
-                        print("PPG callback test successful!")
-                    except Exception as e:
-                        print(f"ERROR: PPG callback test failed: {e}")
-                else:
-                    print("WARNING: No PPG callback registered!")
-                print("=======================================\n")
-            
-            # Schedule the test to run after a short delay
-            import threading
-            threading.Timer(5.0, send_test_message).start()
-
-        except pygatt.exceptions.BLEError as error:
-            print(f'=== FAILED TO SUBSCRIBE TO PPG: {error} ===')
-            logger.error(f'Failed to subscribe to PPG: {error}')
-            raise Exception(
-                'PPG data is not available on this device or there was a connection error'
-            )
+        """subscribe to ppg stream."""
+        self.device.subscribe(
+            MUSE_GATT_ATTR_PPG1, callback=self._handle_ppg)
+        self.device.subscribe(
+            MUSE_GATT_ATTR_PPG2, callback=self._handle_ppg)
+        self.device.subscribe(
+            MUSE_GATT_ATTR_PPG3, callback=self._handle_ppg)
 
     def _handle_ppg(self, handle, data):
         """Callback for receiving a sample.
@@ -694,97 +576,20 @@ class Muse():
         samples are received in this order : 56, 59, 62
         wait until we get x and call the data callback
         """
-        current_time = self.time_func()
-        print(f'=== PPG CALLBACK TRIGGERED at {current_time:.3f} ===')
-        print(f'Handle: {handle}, Data length: {len(data)}')
-        
-        # Log all active handles to help debug
-        if not hasattr(self, 'ppg_handles_seen'):
-            self.ppg_handles_seen = set()
-        self.ppg_handles_seen.add(handle)
-        print(f'PPG handles seen so far: {sorted(self.ppg_handles_seen)}')
-        
-        timestamp = current_time
-        
-        # Check if the device is actually sending PPG data
-        if len(data) == 0:
-            print(f'WARNING: Received empty PPG data packet on handle {handle}')
-            # Instead of returning, create synthetic data for this handle
-            # This ensures we maintain the stream even with empty packets
-            data = bytes([0, 0] + [handle % 256] * 12)  # Create synthetic packet with handle as data
-            print(f'Created synthetic packet: {data.hex()}')
-            
-        print(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
-        logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
-        
-        # Check if handle is in the expected range
-        if handle not in [56, 59, 62]:
-            print(f'WARNING: Unexpected PPG handle value: {handle}')
-            logger.warning(f'Unexpected PPG handle value: {handle}')
-            # Use a default index based on the order we expect
-            if self.data_ppg[0].sum() == 0:
-                index = 0
-            elif self.data_ppg[1].sum() == 0:
-                index = 1
-            else:
-                index = 2
-        else:
-            index = int((handle - 56) / 3)
-        
-        print(f'PPG index calculated: {index}')
-        logger.debug(f'PPG index calculated: {index}')
-        
-        # Initialize timestamp correction on first packet if not done already
-        if self.first_sample and not hasattr(self, 'reg_ppg_sample_rate'):
-            self._init_timestamp_correction()
-            self.first_sample = False
-        
-        try:
-            tm, d = self._unpack_ppg_channel(data)
-            print(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}, values: {d}')
-            logger.debug(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}, values: {d}')
-        except Exception as e:
-            print(f'Error unpacking PPG data: {e}, data: {data.hex()}')
-            logger.error(f'Error unpacking PPG data: {e}, data: {data.hex()}')
-            # Generate synthetic data instead of returning
-            tm = int(time() * 1000) % 65536  # Use current time as packet index
-            d = [1000 + index*500, 1500 + index*500, 2000 + index*500, 
-                 2500 + index*500, 3000 + index*500, 3500 + index*500]
-            print(f'Using synthetic PPG data: {d}')
+        timestamp = self.time_func()
+        index = int((handle - 56) / 3)
+        tm, d = self._unpack_ppg_channel(data)
 
         if self.last_tm_ppg == 0:
             self.last_tm_ppg = tm - 1
-            print('First PPG packet received')
-            logger.debug('First PPG packet received')
 
         self.data_ppg[index] = d
         self.timestamps_ppg[index] = timestamp
         
-        # Force a callback after receiving data on any handle to ensure data flows
-        # This helps when some handles might not be receiving data
-        should_push = False
-        
-        # Check if we have data in all channels or if this is the last expected handle
-        if handle == 62 or all(np.sum(self.data_ppg[i]) > 0 for i in range(3)):
-            should_push = True
-        
-        # Also push data if we haven't pushed in a while (500ms)
-        if hasattr(self, 'last_ppg_push_time'):
-            if timestamp - self.last_ppg_push_time > 0.5:
-                should_push = True
-        else:
-            self.last_ppg_push_time = timestamp
-        
-        if should_push:
-            print(f'Pushing PPG data, packet index: {tm}')
-            logger.debug(f'Pushing PPG data, packet index: {tm}')
-            
-            # Update last push time
-            self.last_ppg_push_time = timestamp
-            
-            if tm != self.last_tm_ppg + 1 and tm != self.last_tm_ppg:
-                print(f"Missing PPG sample {tm} : {self.last_tm_ppg}")
-                logger.debug(f"Missing PPG sample {tm} : {self.last_tm_ppg}")
+        # last data received
+        if handle == 62:
+            if tm != self.last_tm_ppg + 1:
+                logger.debug("Missing PPG sample %d : %d" % (tm, self.last_tm_ppg))
             self.last_tm_ppg = tm
 
             # calculate index of time samples
@@ -800,42 +605,7 @@ class Muse():
 
             # push data
             if self.callback_ppg:
-                print(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}, data: {self.data_ppg}')
-                print(f'PPG timestamps: {timestamps}')
-                logger.debug(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}')
-                
-                # Check for invalid values
-                if np.isnan(self.data_ppg).any():
-                    print(f'WARNING: NaN values detected in PPG data')
-                    # Replace NaN with synthetic data
-                    for i in range(self.data_ppg.shape[0]):
-                        if np.isnan(self.data_ppg[i]).any():
-                            self.data_ppg[i] = [1000 + i*500, 1500 + i*500, 2000 + i*500, 
-                                               2500 + i*500, 3000 + i*500, 3500 + i*500]
-                
-                if np.isinf(self.data_ppg).any():
-                    print(f'WARNING: Infinite values detected in PPG data')
-                    # Replace inf with synthetic data
-                    self.data_ppg = np.nan_to_num(self.data_ppg, nan=0, posinf=5000, neginf=1000)
-                
-                # Ensure we have non-zero data in all channels
-                for i in range(self.data_ppg.shape[0]):
-                    if np.sum(np.abs(self.data_ppg[i])) < 0.1:
-                        print(f'Channel {i} has all zeros, replacing with synthetic data')
-                        self.data_ppg[i] = [1000 + i*500, 1500 + i*500, 2000 + i*500, 
-                                           2500 + i*500, 3000 + i*500, 3500 + i*500]
-                
-                # Convert any large values to a reasonable range
-                if np.max(self.data_ppg) > 100000:
-                    print(f'WARNING: Very large values detected in PPG data: {np.max(self.data_ppg)}')
-                    # Clip to reasonable range
-                    self.data_ppg = np.clip(self.data_ppg, 0, 10000)
-                    print(f'Clipped PPG data: {self.data_ppg}')
-                
                 self.callback_ppg(self.data_ppg, timestamps)
-            else:
-                print('PPG callback is None, data not being processed')
-                logger.warning('PPG callback is None, data not being processed')
 
             # reset sample
             self._init_ppg_sample()
@@ -844,148 +614,13 @@ class Muse():
         """Decode data packet of one PPG channel.
         Each packet is encoded with a 16bit timestamp followed by 6
         samples with a 24 bit resolution.
-        
-        Note: Different Muse models may use different packet formats.
-        This implementation tries multiple formats.
         """
-        try:
-            print(f'=== UNPACKING PPG PACKET ===')
-            print(f'Packet length: {len(packet)}, hex: {packet.hex()}')
-            logger.debug(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
-            
-            # Ensure packet is at least 2 bytes (for timestamp)
-            if len(packet) < 2:
-                print(f'WARNING: PPG packet too short: {len(packet)} bytes')
-                return 0, [100, 100, 100, 100, 100, 100]  # Return test data
-            
-            # Extract timestamp (first 2 bytes)
-            packetIndex = int.from_bytes(packet[0:2], byteorder='little')
-            
-            # Try multiple decoding patterns based on the packet length
-            decoded_data = None
-            
-            # Special handling for Muse S
-            if hasattr(self, 'name') and self.name and "MuseS" in self.name:
-                print("Using Muse S specific decoding patterns")
-                
-                # Try Muse S specific format (observed in some devices)
-                if len(packet) >= 8:
-                    try:
-                        # Some Muse S devices use a different format with fewer bytes per sample
-                        data = []
-                        # Skip first 2 bytes (timestamp)
-                        for i in range(2, min(len(packet), 14), 2):
-                            if i+1 < len(packet):
-                                # Read 2 bytes as a 16-bit integer
-                                value = int.from_bytes(packet[i:i+2], byteorder='little')
-                                data.append(value)
-                        
-                        # Pad to 6 values if needed
-                        while len(data) < 6:
-                            data.append(data[-1] if data else 1000)  # Repeat last value or use 1000
-                        
-                        # Truncate if too many
-                        data = data[:6]
-                        
-                        # Check if data is valid (non-zero)
-                        if any(x > 0 for x in data):
-                            print(f'Successfully decoded Muse S PPG data with byte parsing: {data}')
-                            decoded_data = data
-                    except Exception as e:
-                        print(f'Error decoding with Muse S specific format: {e}')
-            
-            # Try standard 24-bit format (used by Muse 2)
-            if decoded_data is None and len(packet) >= 16:
-                try:
-                    aa = bitstring.Bits(bytes=packet)
-                    pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
-                    res = aa.unpack(pattern)
-                    packetIndex = res[0]
-                    data = [int(x) for x in res[1:]]
-                    
-                    # Check if data is valid (non-zero)
-                    if any(x > 0 for x in data):
-                        print(f'Successfully decoded PPG data with 24-bit format: {data}')
-                        decoded_data = data
-                except Exception as e:
-                    print(f'Error decoding with 24-bit format: {e}')
-            
-            # Try 16-bit format (used by some Muse models)
-            if decoded_data is None and len(packet) >= 12:
-                try:
-                    aa = bitstring.Bits(bytes=packet)
-                    pattern = "uint:16,uint:16,uint:16,uint:16,uint:16,uint:16,uint:16"
-                    res = aa.unpack(pattern)
-                    packetIndex = res[0]
-                    data = [int(x) for x in res[1:]]
-                    
-                    # Check if data is valid (non-zero)
-                    if any(x > 0 for x in data):
-                        print(f'Successfully decoded PPG data with 16-bit format: {data}')
-                        decoded_data = data
-                except Exception as e:
-                    print(f'Error decoding with 16-bit format: {e}')
-            
-            # Try 12-bit format (similar to EEG format)
-            if decoded_data is None and len(packet) >= 10:
-                try:
-                    aa = bitstring.Bits(bytes=packet)
-                    pattern = "uint:16,uint:12,uint:12,uint:12,uint:12,uint:12,uint:12"
-                    res = aa.unpack(pattern)
-                    packetIndex = res[0]
-                    data = [int(x) for x in res[1:]]
-                    
-                    # Check if data is valid (non-zero)
-                    if any(x > 0 for x in data):
-                        print(f'Successfully decoded PPG data with 12-bit format: {data}')
-                        decoded_data = data
-                except Exception as e:
-                    print(f'Error decoding with 12-bit format: {e}')
-            
-            # Try raw byte parsing as a last resort
-            if decoded_data is None and len(packet) > 2:
-                try:
-                    # Skip the first 2 bytes (timestamp) and parse the rest as data
-                    data = []
-                    for i in range(2, min(14, len(packet)), 2):
-                        if i+1 < len(packet):
-                            value = int.from_bytes(packet[i:i+2], byteorder='little')
-                            data.append(value)
-                    
-                    # Pad to 6 values if needed
-                    while len(data) < 6:
-                        data.append(0)
-                    
-                    # Truncate if too many
-                    data = data[:6]
-                    
-                    # Check if data is valid (non-zero)
-                    if any(x > 0 for x in data):
-                        print(f'Successfully decoded PPG data with raw byte parsing: {data}')
-                        decoded_data = data
-                except Exception as e:
-                    print(f'Error decoding with raw byte parsing: {e}')
-            
-            # If we have decoded data, return it
-            if decoded_data is not None:
-                return packetIndex, decoded_data
-            
-            # If all decoding attempts failed, generate synthetic data
-            print(f'All decoding attempts failed, using synthetic data')
-            synthetic_data = []
-            for i in range(6):
-                # Create sine wave with amplitude 1000-5000 and period based on packet index
-                value = 3000 + 2000 * np.sin(0.1 * (packetIndex + i))
-                synthetic_data.append(int(value))
-            
-            print(f'Using synthetic PPG data for packet index {packetIndex}: {synthetic_data}')
-            return packetIndex, synthetic_data
-            
-        except Exception as e:
-            print(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
-            logger.error(f'Error in _unpack_ppg_channel: {e}, packet length: {len(packet)}, hex: {packet.hex()}')
-            # Return synthetic data instead of zeros
-            return 0, [500, 1000, 1500, 2000, 2500, 3000]
+        aa = bitstring.Bits(bytes=packet)
+        pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
+        res = aa.unpack(pattern)
+        packetIndex = res[0]
+        data = res[1:]
+        return packetIndex, data
     
 
     def _disable_light(self):
