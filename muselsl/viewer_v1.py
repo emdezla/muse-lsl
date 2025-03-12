@@ -117,7 +117,7 @@ class LSLViewer():
         elif self.data_source == "PPG":
             # For PPG, extremely simplified plot
             self.data = np.zeros((self.n_samples, self.n_chan))
-            self.subsample = max(self.subsample, 16)  # Increase subsample even more to reduce points
+            self.subsample = 4  # Use fewer points but still show detail
             
             # Use different colors for each channel
             colors = ['r', 'g', 'b']
@@ -136,7 +136,7 @@ class LSLViewer():
         elif self.data_source in ["ACC", "GYRO"]:
             # For ACC and GYRO, extremely simplified plot
             self.data = np.zeros((self.n_samples, 3))  # X, Y, Z
-            self.subsample = max(self.subsample, 16)  # Increase subsample even more to reduce points
+            self.subsample = 4  # Use fewer points but still show detail
             
             # Labels for axes
             axis_labels = ['X', 'Y', 'Z']
@@ -219,32 +219,31 @@ class LSLViewer():
                         
                         # For ACC and GYRO, data comes as [sample1, sample2, ...] where each sample is [x, y, z]
                         if len(samples) > 0:
-                            # Simple reshape to ensure we have a 2D array with 3 columns
-                            if samples.ndim == 1:
-                                reshaped_samples = samples.reshape(1, -1)
-                            else:
-                                # Just take the first 3 columns if there are more
-                                reshaped_samples = np.array(samples)[:, :3]
+                            # Minimal processing - just ensure we have the right shape
+                            samples_array = np.array(samples)
+                            if samples_array.ndim == 1:
+                                samples_array = samples_array.reshape(1, -1)
+                            
+                            # Just take the first 3 columns (X, Y, Z)
+                            if samples_array.shape[1] >= 3:
+                                samples_array = samples_array[:, :3]
                             
                             # Append new data and keep only the last n_samples
-                            self.data = np.vstack([self.data, reshaped_samples])
+                            self.data = np.vstack([self.data, samples_array])
                             self.data = self.data[-self.n_samples:]
                             
                             # No filtering for ACC/GYRO data
                             plot_data = self.data
                             
-                            # Simplified update - just update the lines directly
-                            k += 1
-                            if k >= 5:  # Update even less frequently (every 5 samples)
-                                # Direct update of each axis line with raw data
-                                for ii in range(3):
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(self.data[::self.subsample, ii])
-                                
-                                # Force redraw
-                                self.fig.canvas.draw()
-                                self.fig.canvas.flush_events()
-                                k = 0
+                            # Update on every sample for maximum responsiveness
+                            # Direct update of each axis line with raw data
+                            for ii in range(3):
+                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                self.lines[ii].set_ydata(self.data[::self.subsample, ii])
+                            
+                            # Force redraw
+                            self.fig.canvas.draw()
+                            self.fig.canvas.flush_events()
                             
                             # Use fixed y-axis limits for ACC data
                             if self.data_source == "ACC":
@@ -264,29 +263,28 @@ class LSLViewer():
                         if len(samples) > 0:
                             # No debug prints to improve performance
                             
-                            # Simple reshape to ensure we have a 2D array
-                            if samples.ndim == 1:
-                                samples = samples.reshape(1, -1)
+                            # Minimal processing - just ensure we have the right shape
+                            samples_array = np.array(samples)
+                            if samples_array.ndim == 1:
+                                samples_array = samples_array.reshape(1, -1)
                             
-                            self.data = np.vstack([self.data, samples])
+                            # Append raw data directly
+                            self.data = np.vstack([self.data, samples_array])
                             self.data = self.data[-self.n_samples:]
                             
-                            # Simplified update - just update the lines directly
-                            k += 1
-                            if k >= 5:  # Update even less frequently (every 5 samples)
-                                # Direct update with raw data
-                                for ii in range(min(3, self.n_chan)):
-                                    self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
-                                    self.lines[ii].set_ydata(self.data[::self.subsample, ii])
-                                
-                                # Use fixed y-axis limits for PPG data
-                                self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
-                                self.axes.set_xlim(-self.window, 0)
-                                
-                                # Force redraw
-                                self.fig.canvas.draw()
-                                self.fig.canvas.flush_events()
-                                k = 0
+                            # Update on every sample for maximum responsiveness
+                            # Direct update with raw data
+                            for ii in range(min(3, self.n_chan)):
+                                self.lines[ii].set_xdata(self.times[::self.subsample] - self.times[-1])
+                                self.lines[ii].set_ydata(self.data[::self.subsample, ii])
+                            
+                            # Use fixed y-axis limits for PPG data
+                            self.axes.set_ylim(0, 4000)  # Fixed range for PPG values
+                            self.axes.set_xlim(-self.window, 0)
+                            
+                            # Force redraw
+                            self.fig.canvas.draw()
+                            self.fig.canvas.flush_events()
                     
                     else:  # EEG
                         # Convert samples to numpy array if it's not already
