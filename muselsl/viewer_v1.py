@@ -314,12 +314,14 @@ class LSLViewer():
             if self.data_source == "PPG":
                 non_zero_count = np.count_nonzero(d)
                 if non_zero_count > 0:
+                    print(f"=== PPG DATA FOUND IN BUFFER ===")
                     print(f"PPG data buffer has {non_zero_count} non-zero values")
                     print(f"Sample values: {d[:, -10:] if d.shape[1] >= 10 else d}")
                     # Print min/max values to check data range
                     print(f"Min values per channel: {np.min(d, axis=1)}")
                     print(f"Max values per channel: {np.max(d, axis=1)}")
                 else:
+                    print("=== PPG DATA BUFFER IS EMPTY ===")
                     print("PPG data buffer is empty (all zeros)")
                     # Insert test data to verify plotting works
                     print("Inserting test data to verify plotting functionality")

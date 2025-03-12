@@ -78,15 +78,14 @@ class Muse():
                                                    if self.name else 'Muse',
                                                    self.address))
                 
-                # Check if device name is available to determine if PPG is supported
+                # Print PPG status
+                if self.enable_ppg:
+                    print(f"=== PPG streaming is enabled, will attempt to subscribe ===")
+                    print(f"Device: {self.name if self.name else 'Unknown'}, Address: {self.address}")
+                
+                # Check if device name is available
                 if self.name:
                     print(f"Device name: {self.name}")
-                    if "Muse 2" in self.name:
-                        print("Detected Muse 2 device which supports PPG")
-                    elif "MuseS" in self.name:
-                        print("WARNING: Detected Muse S device - PPG support may be limited")
-                    else:
-                        print("WARNING: Device may not support PPG - PPG is only available on Muse 2")
                 if self.backend == 'gatt':
                     self.interface = self.interface or 'hci0'
                     self.adapter = pygatt.GATTToolBackend(self.interface)
@@ -565,7 +564,8 @@ class Muse():
     def _subscribe_ppg(self):
         try:
             """subscribe to ppg stream."""
-            print('Attempting to subscribe to PPG streams...')
+            print('=== ATTEMPTING TO SUBSCRIBE TO PPG STREAMS ===')
+            print(f'Device address: {self.address}, name: {self.name}')
             logger.info('Attempting to subscribe to PPG streams...')
             
             print(f'PPG1 UUID: {MUSE_GATT_ATTR_PPG1}')
@@ -586,14 +586,14 @@ class Muse():
             print('Successfully subscribed to PPG3 stream')
             logger.info('Successfully subscribed to PPG3 stream')
             
-            print('All PPG streams subscribed successfully')
+            print('=== ALL PPG STREAMS SUBSCRIBED SUCCESSFULLY ===')
             logger.info('All PPG streams subscribed successfully')
 
         except pygatt.exceptions.BLEError as error:
-            print(f'Failed to subscribe to PPG: {error}')
+            print(f'=== FAILED TO SUBSCRIBE TO PPG: {error} ===')
             logger.error(f'Failed to subscribe to PPG: {error}')
             raise Exception(
-                'PPG data is not available on this device. PPG is only available on Muse 2'
+                'PPG data is not available on this device or there was a connection error'
             )
 
     def _handle_ppg(self, handle, data):
@@ -602,7 +602,10 @@ class Muse():
         samples are received in this order : 56, 59, 62
         wait until we get x and call the data callback
         """
-        timestamp = self.time_func()
+        current_time = self.time_func()
+        print(f'=== PPG CALLBACK TRIGGERED at {current_time:.3f} ===')
+        print(f'Handle: {handle}, Data length: {len(data)}')
+        timestamp = current_time
         print(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         logger.debug(f'Received PPG data on handle: {handle}, data length: {len(data)}, hex: {data.hex()}')
         
@@ -735,7 +738,8 @@ class Muse():
         samples with a 24 bit resolution.
         """
         try:
-            print(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
+            print(f'=== UNPACKING PPG PACKET ===')
+            print(f'Packet length: {len(packet)}, hex: {packet.hex()}')
             logger.debug(f'Unpacking PPG packet of length: {len(packet)}, hex: {packet.hex()}')
             
             # Ensure packet is at least 2 bytes (for timestamp)

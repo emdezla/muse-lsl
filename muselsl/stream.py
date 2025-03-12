@@ -218,6 +218,7 @@ def stream(
                 outlet.push_sample(data[:, ii], timestamps[ii])
 
         def push_ppg_with_debug(data, timestamps):
+            print(f"=== PUSH_PPG_WITH_DEBUG CALLED ===")
             print(f"Received PPG data with shape: {data.shape}, timestamps length: {len(timestamps)}")
             
             # Check if data is all zeros or very small values
