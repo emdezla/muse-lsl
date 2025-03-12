@@ -169,6 +169,7 @@ def stream(
             eeg_outlet = StreamOutlet(eeg_info, LSL_EEG_CHUNK)
 
         if ppg_enabled:
+            print('Setting up PPG stream...')
             ppg_info = StreamInfo('Muse', 'PPG', MUSE_NB_PPG_CHANNELS, MUSE_SAMPLING_PPG_RATE,
                                 'float32', 'Muse%s' % address)
             ppg_info.desc().append_child_value("manufacturer", "Muse")
@@ -181,6 +182,7 @@ def stream(
                     .append_child_value("type", "PPG")
 
             ppg_outlet = StreamOutlet(ppg_info, LSL_PPG_CHUNK)
+            print(f'PPG stream setup complete with {MUSE_NB_PPG_CHANNELS} channels at {MUSE_SAMPLING_PPG_RATE}Hz')
 
         if acc_enabled:
             acc_info = StreamInfo('Muse', 'ACC', MUSE_NB_ACC_CHANNELS, MUSE_SAMPLING_ACC_RATE,
@@ -214,8 +216,18 @@ def stream(
             for ii in range(data.shape[1]):
                 outlet.push_sample(data[:, ii], timestamps[ii])
 
+        def push_ppg_with_debug(data, timestamps):
+            print(f"Received PPG data with shape: {data.shape}")
+            try:
+                for ii in range(data.shape[1]):
+                    print(f"Pushing PPG sample {ii}: {data[:, ii]}")
+                    ppg_outlet.push_sample(data[:, ii], timestamps[ii])
+                print(f"Successfully pushed {data.shape[1]} PPG samples")
+            except Exception as e:
+                print(f"Error pushing PPG data: {e}")
+
         push_eeg = partial(push, outlet=eeg_outlet) if not eeg_disabled else None
-        push_ppg = partial(push, outlet=ppg_outlet) if ppg_enabled else None
+        push_ppg = push_ppg_with_debug if ppg_enabled else None
         push_acc = partial(push, outlet=acc_outlet) if acc_enabled else None
         push_gyro = partial(push, outlet=gyro_outlet) if gyro_enabled else None
 

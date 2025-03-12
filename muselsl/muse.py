@@ -555,14 +555,20 @@ class Muse():
     def _subscribe_ppg(self):
         try:
             """subscribe to ppg stream."""
+            logger.info('Attempting to subscribe to PPG streams...')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG1, callback=self._handle_ppg)
+            logger.info('Successfully subscribed to PPG1 stream')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG2, callback=self._handle_ppg)
+            logger.info('Successfully subscribed to PPG2 stream')
             self.device.subscribe(
                 MUSE_GATT_ATTR_PPG3, callback=self._handle_ppg)
+            logger.info('Successfully subscribed to PPG3 stream')
+            logger.info('All PPG streams subscribed successfully')
 
         except pygatt.exceptions.BLEError as error:
+            logger.error(f'Failed to subscribe to PPG: {error}')
             raise Exception(
                 'PPG data is not available on this device. PPG is only available on Muse 2'
             )
@@ -574,18 +580,30 @@ class Muse():
         wait until we get x and call the data callback
         """
         timestamp = self.time_func()
+        logger.debug(f'Received PPG data on handle: {handle}')
+        
         index = int((handle - 56) / 3)
-        tm, d = self._unpack_ppg_channel(data)
+        logger.debug(f'PPG index calculated: {index}')
+        
+        try:
+            tm, d = self._unpack_ppg_channel(data)
+            logger.debug(f'Unpacked PPG data - packet index: {tm}, data shape: {len(d)}')
+        except Exception as e:
+            logger.error(f'Error unpacking PPG data: {e}')
+            return
 
         if self.last_tm_ppg == 0:
             self.last_tm_ppg = tm - 1
+            logger.debug('First PPG packet received')
 
         self.data_ppg[index] = d
         self.timestamps_ppg[index] = timestamp
+        
         # last data received
         if handle == 62:
+            logger.debug(f'Complete PPG sample received (handle 62), packet index: {tm}')
             if tm != self.last_tm_ppg + 1:
-                logger.debug("missing sample %d : %d" % (tm, self.last_tm_ppg))
+                logger.debug(f"Missing PPG sample {tm} : {self.last_tm_ppg}")
             self.last_tm_ppg = tm
 
             # calculate index of time samples
@@ -601,7 +619,10 @@ class Muse():
 
             # push data
             if self.callback_ppg:
+                logger.debug(f'Pushing PPG data to callback, shape: {self.data_ppg.shape}')
                 self.callback_ppg(self.data_ppg, timestamps)
+            else:
+                logger.warning('PPG callback is None, data not being processed')
 
             # reset sample
             self._init_ppg_sample()
@@ -611,14 +632,19 @@ class Muse():
         Each packet is encoded with a 16bit timestamp followed by 3
         samples with an x bit resolution.
         """
-
-        aa = bitstring.Bits(bytes=packet)
-        pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
-        res = aa.unpack(pattern)
-        packetIndex = res[0]
-        data = res[1:]
-
-        return packetIndex, data
+        try:
+            logger.debug(f'Unpacking PPG packet of length: {len(packet)}')
+            aa = bitstring.Bits(bytes=packet)
+            pattern = "uint:16,uint:24,uint:24,uint:24,uint:24,uint:24,uint:24"
+            res = aa.unpack(pattern)
+            packetIndex = res[0]
+            data = res[1:]
+            logger.debug(f'PPG packet unpacked successfully: index={packetIndex}, data length={len(data)}')
+            return packetIndex, data
+        except Exception as e:
+            logger.error(f'Error in _unpack_ppg_channel: {e}')
+            # Re-raise to allow caller to handle
+            raise
     
 
     def _disable_light(self):
