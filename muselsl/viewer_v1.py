@@ -230,11 +230,11 @@ class LSLViewer():
                     axs[i].set_ylim(-2, 2)
                 elif self.data_source == "GYRO":
                     axs[i].set_ylim(-250, 250)
-                elif self.data_source == "PPG":                                                                                                                                                          
-                     # Calculate y-axis limits based on the average of the signal                                                                                                                         
-                     with self.lock:                                                                                                                                                                      
-                         avg_signal = np.mean(self.data_buffer[i, :])                                                                                                                                     
-                     axs[i].set_ylim(avg_signal - 1000, avg_signal + 1000)  
+                elif self.data_source == "PPG":
+                    # Calculate y-axis limits based on the average of the signal for each channel
+                    with self.lock:
+                        avg_signal = np.mean(self.data_buffer[i, :])
+                    axs[i].set_ylim(avg_signal - 1000, avg_signal + 1000)
             
             # Set fixed x-axis limits
             for ax in axs:
