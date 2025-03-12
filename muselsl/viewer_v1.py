@@ -231,7 +231,10 @@ class LSLViewer():
                 elif self.data_source == "GYRO":
                     axs[i].set_ylim(-250, 250)
                 elif self.data_source == "PPG":
-                    axs[i].set_ylim(-5000, 700000) 
+                    if i == len(labels) - 1:  # Last channel (PPG Green)
+                        axs[i].set_ylim(-5000, 5000)
+                    else:  # IR and Red channels
+                        axs[i].set_ylim(0, 700000)
             
             # Set fixed x-axis limits
             for ax in axs:
