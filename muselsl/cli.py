@@ -224,7 +224,7 @@ class CLI:
 
     def view(self):
         parser = argparse.ArgumentParser(
-            description='View EEG data from an LSL stream.')
+            description='View EEG, PPG, ACC, or GYRO data from an LSL stream.')
         parser.add_argument(
             "-w",
             "--window",
@@ -269,7 +269,15 @@ class CLI:
             type=str,
             default='TkAgg',
             help="Matplotlib backend to use. Default: %(default)s")
+        parser.add_argument(
+            "-t",
+            "--type",
+            dest="data_source",
+            type=str,
+            default="EEG",
+            choices=["EEG", "PPG", "ACC", "GYRO"],
+            help="Data type to visualize. Either EEG, PPG, ACC, or GYRO.")
         args = parser.parse_args(sys.argv[2:])
         from . import view
         view(args.window, args.scale, args.refresh, args.figure, args.version,
-             args.backend)
+             args.backend, args.data_source)
