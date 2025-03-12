@@ -46,16 +46,17 @@ def record(
     inlet = StreamInlet(streams[0], max_chunklen=chunk_length)
     # eeg_time_correction = inlet.time_correction()
 
-    print("Looking for a Markers stream...")
-    marker_streams = resolve_byprop(
-        'name', 'Markers', timeout=LSL_SCAN_TIMEOUT)
+    #print("Looking for a Markers stream...")
+    #marker_streams = resolve_byprop(
+        #'name', 'Markers', timeout=LSL_SCAN_TIMEOUT)
 
-    if marker_streams:
-        inlet_marker = StreamInlet(marker_streams[0])
-    else:
-        inlet_marker = False
-        print("Can't find Markers stream.")
+    #if marker_streams:
+        #inlet_marker = StreamInlet(marker_streams[0])
+    #else:
+        #inlet_marker = False
+        #print("Can't find Markers stream.")
 
+    inlet_marker = False
     info = inlet.info()
     description = info.desc()
 
@@ -133,8 +134,8 @@ def _save(
     inlet_marker,
     markers,
     ch_names: List[str],
-    last_written_timestamp: Optional[float] = None,
-):
+    last_written_timestamp: Optional[float] = None,):
+
     res = np.concatenate(res, axis=0)
     timestamps = np.array(timestamps) + time_correction
 
@@ -176,7 +177,7 @@ def _save(
 
 
 
-# Rercord directly from a Muse without the use of LSL
+
 
 
 def record_direct(duration,
@@ -189,7 +190,8 @@ def record_direct(duration,
         raise (NotImplementedError(
             'Direct record not supported with BlueMuse backend. Use record after starting stream instead.'
         ))
-
+    
+    # Record directly from a Muse without the use of LSL
     if not address:
         found_muse = find_muse(name, backend)
         if not found_muse:

@@ -124,3 +124,677 @@
 
 # 2025-03-11 17:15:40.651461
 +/help how to exit from architect mode?
+
+# 2025-03-11 20:30:22.949751
++y
+
+# 2025-03-11 20:30:40.905358
++/add viewer_v1.py
+
+# 2025-03-11 20:30:45.777831
++y
+
+# 2025-03-11 20:31:29.382978
++/read-only muselsl\record.py muselsl\muse.py
+
+# 2025-03-11 20:37:16.312738
++UPDATE view() to be able to take the type of data as argument, as record() does. UPDATE class LSLViewer so that the different types of data (EEG, PPG, ACC and GYRO) are displayed in appropiete graphs with correct labels and axes. PPG graph should display the data from the three channels (instead of 5 in the case of EEG) and ACC and GYRO should display the data from the three axes. Be sure to take into account the way the data is unpacked (it appears in muse.py and in record.py). 
+
+# 2025-03-11 20:38:53.469602
++y
+
+# 2025-03-11 20:41:25.239470
++n
+
+# 2025-03-11 20:41:37.687182
++/drop
+
+# 2025-03-11 20:41:44.480125
++/add muselsl\viewer_v1.py
+
+# 2025-03-11 20:41:51.911961
++/add record.py
+
+# 2025-03-11 20:41:55.829572
++y
+
+# 2025-03-11 20:42:01.372887
++/drop
+
+# 2025-03-11 20:47:54.703046
++/undo
+
+# 2025-03-11 20:49:36.791171
++/add muselsl\viewer_v1.py
+
+# 2025-03-11 20:49:49.464876
++/read-only muselsl\record.py
+
+# 2025-03-11 20:49:56.848006
++/add muselsl\muse.py
+
+# 2025-03-11 20:50:20.783767
++UPDATE view() to be able to take the type of data as argument, as record() does. UPDATE class LSLViewer so that the different types of data (EEG, PPG, ACC and GYRO) are displayed in appropiete graphs with correct labels and axes. PPG graph should display the data from the three channels (instead of 5 in the case of EEG) and ACC and GYRO should display the data from the three axes. Be sure to take into account the way the data is unpacked (it appears in muse.py and in record.py)
+
+# 2025-03-11 20:51:46.339511
++y
+
+# 2025-03-11 20:53:46.155473
++you have not implemented the changes in viewer_v1.py
+
+# 2025-03-11 20:55:06.749904
++n
+
+# 2025-03-11 20:59:43.841616
++/drop muselsl\cli.py muselsl\view.py
+
+# 2025-03-11 20:59:57.608610
++/drop muse.py
+
+# 2025-03-11 21:00:09.257128
++/read-only muse.py
+
+# 2025-03-11 21:00:18.839820
++/read-only muselsl\muse.py
+
+# 2025-03-11 21:03:30.327177
++When I try the new code to view the datatypes ACC, GYRO or PPG I get an error related to the cutoff frequency (it should be between 0 and fs/2). Please fix this problem. I dont know how you have tried to plot those data types but maybe it would be useful for you to have a look at this working code that I have from a similar project.  def start_plotting(self):
++        """
++        Displays live plots for the chosen stream using matplotlib's FuncAnimation.
++        """
++        # For all data types, use subplots for each channel
++        fig, axs = plt.subplots(self.channels, 1, figsize=(10, 8), sharex=True)
++        # Ensure axs is always a list/array for consistent indexing
++        if self.channels == 1:
++            axs = [axs]
++
++        # Create line objects for blitting
++        lines = []
++        
++        # Set fixed x-axis limits for time window
++        time_window = 5  # Show only the last 5 seconds for all data types
++        
++        def update(_):
++            with self.lock:
++                idx = self.buffer_idx
++                # Use np.roll for more efficient circular buffer handling
++                t = np.roll(self.time_buffer, -idx)
++                d = np.roll(self.data_buffer, -idx, axis=1)
++            
++            # Filter data for the time window
++            if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
++                last_timestamp = t[-1]
++                mask = t >= (last_timestamp - time_window)
++                # Ensure we have at least some data points even if time window is not filled yet
++                if np.sum(mask) > 0:
++                    t_plot = t[mask]
++                    d_plot = d[:, mask]
++                else:
++                    # If no data in time window yet, use all available non-zero data
++                    non_zero_mask = t != 0
++                    t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
++                    d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((self.channels, 1))
++            else:
++                t_plot = np.array([0])
++                d_plot = np.zeros((self.channels, 1))
++
++            # Normalize time to show seconds from current time
++            if len(t_plot) > 0:
++                t_normalized = t_plot - (t_plot[-1] if t_plot[-1] != 0 else 0)
++            else:
++                t_normalized = np.array([0])
++
++            # Set channel labels based on the selected stream
++            if self.stream_key == "EEG":
++                labels = ["TP9", "AF7", "AF8", "TP10"]
++            elif self.stream_key == "ACC":
++                labels = ["Acc X", "Acc Y", "Acc Z"]
++            elif self.stream_key == "GYRO":
++                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
++            elif self.stream_key == "PPG":
++                labels = ["IR", "G", "R"]
++            else:
++                labels = [f"Ch {i+1}" for i in range(self.channels)]
++
++            if self.stream_key == "EEG":
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                        # Set fixed y-axis limits for EEG (typical range)
++                        axs[i].set_ylim(-1000, 1000)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        line.set_data(t_normalized, d_plot[i])
++                        
++                        # Dynamically adjust y-limits if data exceeds current view
++                        if len(d_plot[i]) > 0:
++                            data_min, data_max = np.min(d_plot[i]), np.max(d_plot[i])
++                            y_min, y_max = axs[i].get_ylim()
++                            
++                            if data_min < y_min or data_max > y_max:
++                                margin = (data_max - data_min) * 0.1
++                                new_min = min(y_min, data_min - margin)
++                                new_max = max(y_max, data_max + margin)
++                                axs[i].set_ylim(new_min, new_max)
++            
++            elif self.stream_key in ["PPG", "ACC", "GYRO"]:
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        # Get the signal data for this channel
++                        signal_data = d_plot[i]
++                        
++                        # Update the line data
++                        line.set_data(t_normalized, signal_data)
++                        
++                        # Dynamically adjust y-limits based on current data
++                        if len(signal_data) > 0 and np.any(signal_data != 0):
++                            data_min, data_max = np.min(signal_data), np.max(signal_data)
++                            data_range = max(data_max - data_min, 1.0)  # Avoid zero range
++                            
++                            # Center around the mean with padding
++                            avg_value = np.mean(signal_data)
++                            y_min = avg_value - data_range * 0.7
++                            y_max = avg_value + data_range * 0.7
++                            
++                            # Apply the new limits
++                            axs[i].set_ylim(y_min, y_max)
++            
++            return lines
++
++        # Set up the animation with blitting for better performance
++        self.anim = animation.FuncAnimation(
++            fig,
++            update,
++            interval=100,
++            blit=True,
++            save_count=200,
++            cache_frame_data=False
++        )
++
++        plt.tight_layout()
++        plt.show() def start_plotting(self):
++        """
++        Displays live plots for the chosen stream using matplotlib's FuncAnimation.
++        """
++        # For all data types, use subplots for each channel
++        fig, axs = plt.subplots(self.channels, 1, figsize=(10, 8), sharex=True)
++        # Ensure axs is always a list/array for consistent indexing
++        if self.channels == 1:
++            axs = [axs]
++
++        # Create line objects for blitting
++        lines = []
++        
++        # Set fixed x-axis limits for time window
++        time_window = 5  # Show only the last 5 seconds for all data types
++        
++        def update(_):
++            with self.lock:
++                idx = self.buffer_idx
++                # Use np.roll for more efficient circular buffer handling
++                t = np.roll(self.time_buffer, -idx)
++                d = np.roll(self.data_buffer, -idx, axis=1)
++            
++            # Filter data for the time window
++            if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
++                last_timestamp = t[-1]
++                mask = t >= (last_timestamp - time_window)
++                # Ensure we have at least some data points even if time window is not filled yet
++                if np.sum(mask) > 0:
++                    t_plot = t[mask]
++                    d_plot = d[:, mask]
++                else:
++                    # If no data in time window yet, use all available non-zero data
++                    non_zero_mask = t != 0
++                    t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
++                    d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((self.channels, 1))
++            else:
++                t_plot = np.array([0])
++                d_plot = np.zeros((self.channels, 1))
++
++            # Normalize time to show seconds from current time
++            if len(t_plot) > 0:
++                t_normalized = t_plot - (t_plot[-1] if t_plot[-1] != 0 else 0)
++            else:
++                t_normalized = np.array([0])
++
++            # Set channel labels based on the selected stream
++            if self.stream_key == "EEG":
++                labels = ["TP9", "AF7", "AF8", "TP10"]
++            elif self.stream_key == "ACC":
++                labels = ["Acc X", "Acc Y", "Acc Z"]
++            elif self.stream_key == "GYRO":
++                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
++            elif self.stream_key == "PPG":
++                labels = ["IR", "G", "R"]
++            else:
++                labels = [f"Ch {i+1}" for i in range(self.channels)]
++
++            if self.stream_key == "EEG":
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                        # Set fixed y-axis limits for EEG (typical range)
++                        axs[i].set_ylim(-1000, 1000)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        line.set_data(t_normalized, d_plot[i])
++                        
++                        # Dynamically adjust y-limits if data exceeds current view
++                        if len(d_plot[i]) > 0:
++                            data_min, data_max = np.min(d_plot[i]), np.max(d_plot[i])
++                            y_min, y_max = axs[i].get_ylim()
++                            
++                            if data_min < y_min or data_max > y_max:
++                                margin = (data_max - data_min) * 0.1
++                                new_min = min(y_min, data_min - margin)
++                                new_max = max(y_max, data_max + margin)
++                                axs[i].set_ylim(new_min, new_max)
++            
++            elif self.stream_key in ["PPG", "ACC", "GYRO"]:
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        # Get the signal data for this channel
++                        signal_data = d_plot[i]
++                        
++                        # Update the line data
++                        line.set_data(t_normalized, signal_data)
++                        
++                        # Dynamically adjust y-limits based on current data
++                        if len(signal_data) > 0 and np.any(signal_data != 0):
++                            data_min, data_max = np.min(signal_data), np.max(signal_data)
++                            data_range = max(data_max - data_min, 1.0)  # Avoid zero range
++                            
++                            # Center around the mean with padding
++                            avg_value = np.mean(signal_data)
++                            y_min = avg_value - data_range * 0.7
++                            y_max = avg_value + data_range * 0.7
++                            
++                            # Apply the new limits
++                            axs[i].set_ylim(y_min, y_max)
++            
++            return lines
++
++        # Set up the animation with blitting for better performance
++        self.anim = animation.FuncAnimation(
++            fig,
++            update,
++            interval=100,
++            blit=True,
++            save_count=200,
++            cache_frame_data=False
++        )
++
++        plt.tight_layout()
++        plt.show()
+
+# 2025-03-11 21:04:17.020522
++n
+
+# 2025-03-11 21:08:10.581541
++There is still a problem with the dimensions of the data when I am trying to display the new data types. Please pay attention to how the data packets are  unpacked, handled and stored in muse.py and record.py. Fix the code in viewer_v1.py. This is the error I get: $ python -m muselsl view --type ACC
++Looking for a ACC stream...
++Start acquiring data.
++
++                toggle filter : d
++                toogle full screen : f
++                zoom out : /
++                zoom in : *
++                increase time scale : -
++                decrease time scale : +
++
++Exception in thread Thread-1 (update_plot):
++Traceback (most recent call last):
++  File "C:\Users\emili\AppData\Local\Programs\Python\Python313\Lib\threading.py", line 1041, in _bootstrap_inner
++    self.run()
++    ~~~~~~~~^^
++  File "C:\Users\emili\AppData\Local\Programs\Python\Python313\Lib\threading.py", line 992, in run
++
++    self._target(*self._args, **self._kwargs)
++    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
++  File "C:\Users\emili\procoding\muse-lsl\muselsl\viewer_v1.py", line 222, in update_plot
++    self.times = np.concatenate([self.times, timestamps])
++                 ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
++ValueError: all the input arrays must have same number of dimensions, but the array at index 0 has 1 dimension(s) and the array at index 1 has 0 dimension(s)
+
+# 2025-03-11 21:08:44.538292
++d
+
+# 2025-03-11 21:11:39.178094
++The error about the dimensions is still appearing. Please double check that you are handling the data correctly. Again, get inspiration from this code to handle the visualisation of the new data types (PPG, ACC and GYRO). Fix viewer_v1.py  def start_plotting(self):
++        """
++        Displays live plots for the chosen stream using matplotlib's FuncAnimation.
++        """
++        # For all data types, use subplots for each channel
++        fig, axs = plt.subplots(self.channels, 1, figsize=(10, 8), sharex=True)
++        # Ensure axs is always a list/array for consistent indexing
++        if self.channels == 1:
++            axs = [axs]
++
++        # Create line objects for blitting
++        lines = []
++        
++        # Set fixed x-axis limits for time window
++        time_window = 5  # Show only the last 5 seconds for all data types
++        
++        def update(_):
++            with self.lock:
++                idx = self.buffer_idx
++                # Use np.roll for more efficient circular buffer handling
++                t = np.roll(self.time_buffer, -idx)
++                d = np.roll(self.data_buffer, -idx, axis=1)
++            
++            # Filter data for the time window
++            if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
++                last_timestamp = t[-1]
++                mask = t >= (last_timestamp - time_window)
++                # Ensure we have at least some data points even if time window is not filled yet
++                if np.sum(mask) > 0:
++                    t_plot = t[mask]
++                    d_plot = d[:, mask]
++                else:
++                    # If no data in time window yet, use all available non-zero data
++                    non_zero_mask = t != 0
++                    t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
++                    d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((self.channels, 1))
++            else:
++                t_plot = np.array([0])
++                d_plot = np.zeros((self.channels, 1))
++
++            # Normalize time to show seconds from current time
++            if len(t_plot) > 0:
++                t_normalized = t_plot - (t_plot[-1] if t_plot[-1] != 0 else 0)
++            else:
++                t_normalized = np.array([0])
++
++            # Set channel labels based on the selected stream
++            if self.stream_key == "EEG":
++                labels = ["TP9", "AF7", "AF8", "TP10"]
++            elif self.stream_key == "ACC":
++                labels = ["Acc X", "Acc Y", "Acc Z"]
++            elif self.stream_key == "GYRO":
++                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
++            elif self.stream_key == "PPG":
++                labels = ["IR", "G", "R"]
++            else:
++                labels = [f"Ch {i+1}" for i in range(self.channels)]
++
++            if self.stream_key == "EEG":
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                        # Set fixed y-axis limits for EEG (typical range)
++                        axs[i].set_ylim(-1000, 1000)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        line.set_data(t_normalized, d_plot[i])
++                        
++                        # Dynamically adjust y-limits if data exceeds current view
++                        if len(d_plot[i]) > 0:
++                            data_min, data_max = np.min(d_plot[i]), np.max(d_plot[i])
++                            y_min, y_max = axs[i].get_ylim()
++                            
++                            if data_min < y_min or data_max > y_max:
++                                margin = (data_max - data_min) * 0.1
++                                new_min = min(y_min, data_min - margin)
++                                new_max = max(y_max, data_max + margin)
++                                axs[i].set_ylim(new_min, new_max)
++            
++            elif self.stream_key in ["PPG", "ACC", "GYRO"]:
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        # Get the signal data for this channel
++                        signal_data = d_plot[i]
++                        
++                        # Update the line data
++                        line.set_data(t_normalized, signal_data)
++                        
++                        # Dynamically adjust y-limits based on current data
++                        if len(signal_data) > 0 and np.any(signal_data != 0):
++                            data_min, data_max = np.min(signal_data), np.max(signal_data)
++                            data_range = max(data_max - data_min, 1.0)  # Avoid zero range
++                            
++                            # Center around the mean with padding
++                            avg_value = np.mean(signal_data)
++                            y_min = avg_value - data_range * 0.7
++                            y_max = avg_value + data_range * 0.7
++                            
++                            # Apply the new limits
++                            axs[i].set_ylim(y_min, y_max)
++            
++            return lines
++
++        # Set up the animation with blitting for better performance
++        self.anim = animation.FuncAnimation(
++            fig,
++            update,
++            interval=100,
++            blit=True,
++            save_count=200,
++            cache_frame_data=False
++        )
++
++        plt.tight_layout()
++        plt.show() def start_plotting(self):
++        """
++        Displays live plots for the chosen stream using matplotlib's FuncAnimation.
++        """
++        # For all data types, use subplots for each channel
++        fig, axs = plt.subplots(self.channels, 1, figsize=(10, 8), sharex=True)
++        # Ensure axs is always a list/array for consistent indexing
++        if self.channels == 1:
++            axs = [axs]
++
++        # Create line objects for blitting
++        lines = []
++        
++        # Set fixed x-axis limits for time window
++        time_window = 5  # Show only the last 5 seconds for all data types
++        
++        def update(_):
++            with self.lock:
++                idx = self.buffer_idx
++                # Use np.roll for more efficient circular buffer handling
++                t = np.roll(self.time_buffer, -idx)
++                d = np.roll(self.data_buffer, -idx, axis=1)
++            
++            # Filter data for the time window
++            if len(t) > 0 and np.any(t != 0):  # Check if we have valid timestamps
++                last_timestamp = t[-1]
++                mask = t >= (last_timestamp - time_window)
++                # Ensure we have at least some data points even if time window is not filled yet
++                if np.sum(mask) > 0:
++                    t_plot = t[mask]
++                    d_plot = d[:, mask]
++                else:
++                    # If no data in time window yet, use all available non-zero data
++                    non_zero_mask = t != 0
++                    t_plot = t[non_zero_mask] if np.any(non_zero_mask) else np.array([0])
++                    d_plot = d[:, non_zero_mask] if np.any(non_zero_mask) else np.zeros((self.channels, 1))
++            else:
++                t_plot = np.array([0])
++                d_plot = np.zeros((self.channels, 1))
++
++            # Normalize time to show seconds from current time
++            if len(t_plot) > 0:
++                t_normalized = t_plot - (t_plot[-1] if t_plot[-1] != 0 else 0)
++            else:
++                t_normalized = np.array([0])
++
++            # Set channel labels based on the selected stream
++            if self.stream_key == "EEG":
++                labels = ["TP9", "AF7", "AF8", "TP10"]
++            elif self.stream_key == "ACC":
++                labels = ["Acc X", "Acc Y", "Acc Z"]
++            elif self.stream_key == "GYRO":
++                labels = ["Gyr X", "Gyr Y", "Gyr Z"]
++            elif self.stream_key == "PPG":
++                labels = ["IR", "G", "R"]
++            else:
++                labels = [f"Ch {i+1}" for i in range(self.channels)]
++
++            if self.stream_key == "EEG":
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                        # Set fixed y-axis limits for EEG (typical range)
++                        axs[i].set_ylim(-1000, 1000)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        line.set_data(t_normalized, d_plot[i])
++                        
++                        # Dynamically adjust y-limits if data exceeds current view
++                        if len(d_plot[i]) > 0:
++                            data_min, data_max = np.min(d_plot[i]), np.max(d_plot[i])
++                            y_min, y_max = axs[i].get_ylim()
++                            
++                            if data_min < y_min or data_max > y_max:
++                                margin = (data_max - data_min) * 0.1
++                                new_min = min(y_min, data_min - margin)
++                                new_max = max(y_max, data_max + margin)
++                                axs[i].set_ylim(new_min, new_max)
++            
++            elif self.stream_key in ["PPG", "ACC", "GYRO"]:
++                if not lines:  # Initialize lines if they don't exist
++                    for i, lbl in enumerate(labels[:self.channels]):
++                        line, = axs[i].plot([], [], label=lbl)
++                        lines.append(line)
++                        axs[i].set_ylabel(lbl)
++                        axs[i].grid(True)
++                    
++                    # Set fixed x-axis limits
++                    for ax in axs:
++                        ax.set_xlim(-time_window, 0.1)
++                    
++                    axs[-1].set_xlabel('Time (s)')
++                    fig.suptitle(f"{self.stream_key} (last {time_window}s)")
++                
++                # Update line data
++                for i, line in enumerate(lines):
++                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
++                        # Get the signal data for this channel
++                        signal_data = d_plot[i]
++                        
++                        # Update the line data
++                        line.set_data(t_normalized, signal_data)
++                        
++                        # Dynamically adjust y-limits based on current data
++                        if len(signal_data) > 0 and np.any(signal_data != 0):
++                            data_min, data_max = np.min(signal_data), np.max(signal_data)
++                            data_range = max(data_max - data_min, 1.0)  # Avoid zero range
++                            
++                            # Center around the mean with padding
++                            avg_value = np.mean(signal_data)
++                            y_min = avg_value - data_range * 0.7
++                            y_max = avg_value + data_range * 0.7
++                            
++                            # Apply the new limits
++                            axs[i].set_ylim(y_min, y_max)
++            
++            return lines
++
++        # Set up the animation with blitting for better performance
++        self.anim = animation.FuncAnimation(
++            fig,
++            update,
++            interval=100,
++            blit=True,
++            save_count=200,
++            cache_frame_data=False
++        )
++
++        plt.tight_layout()
++        plt.show()

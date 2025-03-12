@@ -216,10 +216,12 @@ class LSLViewer():
 
                 if timestamps and len(timestamps) > 0:
                     # Ensure timestamps is a 1D array
-                    timestamps = np.array(timestamps).flatten()
-                    
+                    timestamps = np.atleast_1d(np.array(timestamps).flatten())
+
+
                     if self.dejitter:
-                        timestamps = np.float64(np.arange(len(timestamps)))
+                        #timestamps = np.float64(np.arange(len(timestamps)))
+                        timestamps = np.arange(len(timestamps), dtype=np.float64)
                         timestamps /= self.sfreq
                         timestamps += self.times[-1] + 1. / self.sfreq
                     

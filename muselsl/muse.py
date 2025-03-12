@@ -284,37 +284,13 @@ class Muse():
         if self.adapter:
             self.adapter.stop()
 
-    def _subscribe_eeg(self):
-        """subscribe to eeg stream."""
-        self.device.subscribe(MUSE_GATT_ATTR_TP9, callback=self._handle_eeg)
-        self.device.subscribe(MUSE_GATT_ATTR_AF7, callback=self._handle_eeg)
-        self.device.subscribe(MUSE_GATT_ATTR_AF8, callback=self._handle_eeg)
-        self.device.subscribe(MUSE_GATT_ATTR_TP10, callback=self._handle_eeg)
-        self.device.subscribe(
-            MUSE_GATT_ATTR_RIGHTAUX, callback=self._handle_eeg)
-
-    def _unpack_eeg_channel(self, packet):
-        """Decode data packet of one EEG channel.
-
-        Each packet is encoded with a 16bit timestamp followed by 12 time
-        samples with a 12 bit resolution.
-        """
-        aa = bitstring.Bits(bytes=packet)
-        pattern = "uint:16,uint:12,uint:12,uint:12,uint:12,uint:12,uint:12, \
-                   uint:12,uint:12,uint:12,uint:12,uint:12,uint:12"
-
-        res = aa.unpack(pattern)
-        packetIndex = res[0]
-        data = res[1:]
-        # 12 bits on a 2 mVpp range
-        data = 0.48828125 * (np.array(data) - 2048)
-        return packetIndex, data
+   
 
     def _init_sample(self):
         """initialize array to store the samples"""
         self.timestamps = np.full(5, np.nan)
         self.data = np.zeros((5, 12))
-
+ 
     def _init_ppg_sample(self):
         """ Initialise array to store PPG samples
 
@@ -354,6 +330,94 @@ class Muse():
         # update parameters
         self.reg_params[1] = R
         self._P = P
+
+        
+    def _init_control(self):
+        """Variable to store the current incoming message."""
+        self._current_msg = ""
+
+    def _subscribe_control(self):
+        self.device.subscribe(
+            MUSE_GATT_ATTR_STREAM_TOGGLE, callback=self._handle_control)
+
+        self._init_control()
+
+    def _handle_control(self, handle, packet):
+        """Handle the incoming messages from the 0x000e handle.
+
+        Each message is 20 bytes
+        The first byte, call it n, is the length of the incoming string.
+        The rest of the bytes are in ASCII, and only n chars are useful
+
+        Multiple messages together are a json object (or dictionary in python)
+        If a message has a '}' then the whole dict is finished.
+
+        Example:
+        {'key': 'value',
+        'key2': 'really-long
+        -value',
+        'key3': 'value3'}
+
+        each line is a message, the 4 messages are a json object.
+        """
+        if handle != 14:
+            return
+
+        # Decode data
+        bit_decoder = bitstring.Bits(bytes=packet)
+        pattern = "uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8, \
+                    uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8"
+
+        chars = bit_decoder.unpack(pattern)
+
+        # Length of the string
+        n_incoming = chars[0]
+
+        # Parse as chars, only useful bytes
+        incoming_message = "".join(map(chr, chars[1:]))[:n_incoming]
+
+        # Add to current message
+        self._current_msg += incoming_message
+
+        if incoming_message[-1] == '}':  # Message ended completely
+            self.callback_control(self._current_msg)
+
+            self._init_control()
+
+
+    def _subscribe_telemetry(self):
+        self.device.subscribe(
+            MUSE_GATT_ATTR_TELEMETRY, callback=self._handle_telemetry)
+
+    def _handle_telemetry(self, handle, packet):
+        """Handle the telemetry (battery, temperature and stuff) incoming data
+        """
+
+        if handle != 26:  # handle 0x1a
+            return
+        timestamp = self.time_func()
+
+        bit_decoder = bitstring.Bits(bytes=packet)
+        pattern = "uint:16,uint:16,uint:16,uint:16,uint:16"  # The rest is 0 padding
+        data = bit_decoder.unpack(pattern)
+
+        battery = data[1] / 512
+        fuel_gauge = data[2] * 2.2
+        adc_volt = data[3]
+        temperature = data[4]
+
+        self.callback_telemetry(timestamp, battery, fuel_gauge, adc_volt,
+                                temperature)
+
+
+    def _subscribe_eeg(self):
+        """subscribe to eeg stream."""
+        self.device.subscribe(MUSE_GATT_ATTR_TP9, callback=self._handle_eeg)
+        self.device.subscribe(MUSE_GATT_ATTR_AF7, callback=self._handle_eeg)
+        self.device.subscribe(MUSE_GATT_ATTR_AF8, callback=self._handle_eeg)
+        self.device.subscribe(MUSE_GATT_ATTR_TP10, callback=self._handle_eeg)
+        self.device.subscribe(
+            MUSE_GATT_ATTR_RIGHTAUX, callback=self._handle_eeg)
 
     def _handle_eeg(self, handle, data):
         """Callback for receiving a sample.
@@ -407,99 +471,26 @@ class Muse():
             # reset sample
             self._init_sample()
 
-    def _init_control(self):
-        """Variable to store the current incoming message."""
-        self._current_msg = ""
+    def _unpack_eeg_channel(self, packet):
+        """Decode data packet of one EEG channel.
 
-    def _subscribe_control(self):
-        self.device.subscribe(
-            MUSE_GATT_ATTR_STREAM_TOGGLE, callback=self._handle_control)
-
-        self._init_control()
-
-    def _handle_control(self, handle, packet):
-        """Handle the incoming messages from the 0x000e handle.
-
-        Each message is 20 bytes
-        The first byte, call it n, is the length of the incoming string.
-        The rest of the bytes are in ASCII, and only n chars are useful
-
-        Multiple messages together are a json object (or dictionary in python)
-        If a message has a '}' then the whole dict is finished.
-
-        Example:
-        {'key': 'value',
-        'key2': 'really-long
-        -value',
-        'key3': 'value3'}
-
-        each line is a message, the 4 messages are a json object.
+        Each packet is encoded with a 16bit timestamp followed by 12 time
+        samples with a 12 bit resolution.
         """
-        if handle != 14:
-            return
+        aa = bitstring.Bits(bytes=packet)
+        pattern = "uint:16,uint:12,uint:12,uint:12,uint:12,uint:12,uint:12, \
+                   uint:12,uint:12,uint:12,uint:12,uint:12,uint:12"
 
-        # Decode data
-        bit_decoder = bitstring.Bits(bytes=packet)
-        pattern = "uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8, \
-                    uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8,uint:8"
+        res = aa.unpack(pattern)
+        packetIndex = res[0]
+        data = res[1:]
+        # 12 bits on a 2 mVpp range
+        data = 0.48828125 * (np.array(data) - 2048)
+        return packetIndex, data
 
-        chars = bit_decoder.unpack(pattern)
 
-        # Length of the string
-        n_incoming = chars[0]
 
-        # Parse as chars, only useful bytes
-        incoming_message = "".join(map(chr, chars[1:]))[:n_incoming]
 
-        # Add to current message
-        self._current_msg += incoming_message
-
-        if incoming_message[-1] == '}':  # Message ended completely
-            self.callback_control(self._current_msg)
-
-            self._init_control()
-
-    def _subscribe_telemetry(self):
-        self.device.subscribe(
-            MUSE_GATT_ATTR_TELEMETRY, callback=self._handle_telemetry)
-
-    def _handle_telemetry(self, handle, packet):
-        """Handle the telemetry (battery, temperature and stuff) incoming data
-        """
-
-        if handle != 26:  # handle 0x1a
-            return
-        timestamp = self.time_func()
-
-        bit_decoder = bitstring.Bits(bytes=packet)
-        pattern = "uint:16,uint:16,uint:16,uint:16,uint:16"  # The rest is 0 padding
-        data = bit_decoder.unpack(pattern)
-
-        battery = data[1] / 512
-        fuel_gauge = data[2] * 2.2
-        adc_volt = data[3]
-        temperature = data[4]
-
-        self.callback_telemetry(timestamp, battery, fuel_gauge, adc_volt,
-                                temperature)
-
-    def _unpack_imu_channel(self, packet, scale=1):
-        """Decode data packet of the accelerometer and gyro (imu) channels.
-
-        Each packet is encoded with a 16bit timestamp followed by 9 samples
-        with a 16 bit resolution.
-        """
-        bit_decoder = bitstring.Bits(bytes=packet)
-        pattern = "uint:16,int:16,int:16,int:16,int:16, \
-                   int:16,int:16,int:16,int:16,int:16"
-
-        data = bit_decoder.unpack(pattern)
-
-        packet_index = data[0]
-
-        samples = np.array(data[1:]).reshape((3, 3), order='F') * scale
-
-        return packet_index, samples
 
     def _subscribe_acc(self):
         self.device.subscribe(
@@ -540,6 +531,26 @@ class Muse():
             packet, scale=MUSE_GYRO_SCALE_FACTOR)
 
         self.callback_gyro(samples, timestamps)
+
+    def _unpack_imu_channel(self, packet, scale=1):
+        """Decode data packet of the accelerometer and gyro (imu) channels.
+
+        Each packet is encoded with a 16bit timestamp followed by 9 samples
+        with a 16 bit resolution.
+        """
+        bit_decoder = bitstring.Bits(bytes=packet)
+        pattern = "uint:16,int:16,int:16,int:16,int:16, \
+                   int:16,int:16,int:16,int:16,int:16"
+
+        data = bit_decoder.unpack(pattern)
+
+        packet_index = data[0]
+
+        samples = np.array(data[1:]).reshape((3, 3), order='F') * scale
+
+        return packet_index, samples
+
+
 
     def _subscribe_ppg(self):
         try:
@@ -609,5 +620,6 @@ class Muse():
 
         return packetIndex, data
     
+
     def _disable_light(self):
         self._write_cmd_str('L0')
