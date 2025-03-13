@@ -293,11 +293,15 @@ class LSLViewer():
                             data_max = np.max(visible_data)
                             padding = (data_max - data_min) * 0.1  # 10% padding
                             
-                            # Update y-axis limits
+                            # Update y-axis limits and ticks
                             axs[i].set_ylim(
                                 data_min - padding,
                                 data_max + padding
                             )
+                            # Set reasonable number of ticks (5 ticks)
+                            axs[i].set_yticks(np.linspace(data_min - padding, data_max + padding, 5))
+                            # Format ticks to show integer values
+                            axs[i].yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             elif self.data_source == "EEG":
                 # Special handling for EEG - stacked channels
                 for ii in range(self.n_chan):
