@@ -82,7 +82,7 @@ class LSLViewer():
         self.ch_names = ch_names
         
         # Set up buffer for data collection
-        buffer_size = int(self.sfreq * window * 2)  # Double window size for buffer
+        buffer_size = int(self.sfreq * window * 6)  # Double window size for buffer
         self.buffer_size = buffer_size
         self.time_buffer = np.zeros(buffer_size)
         self.data_buffer = np.zeros((self.n_chan, buffer_size))
@@ -219,7 +219,7 @@ class LSLViewer():
                 labels = [f"Ch {i+1}" for i in range(channels)]
             
             # Wait 5 seconds before computing the average
-            sleep(5)
+            sleep(10)
 
             # Initialize lines
             for i, lbl in enumerate(labels[:channels]):
