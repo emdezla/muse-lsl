@@ -288,18 +288,15 @@ class LSLViewer():
                         visible_data = d_plot[i][t_normalized >= -self.window]
                         
                         if len(visible_data) > 0:
-                            # Calculate new limits with some padding
-                            data_min = np.min(visible_data)
-                            data_max = np.max(visible_data)
-                            padding = (data_max - data_min) * 0.1  # 10% padding
+                            # Calculate median and set fixed range around it
+                            data_median = np.median(visible_data)
+                            y_min = data_median - 250  # Fixed 500 unit range centered on median
+                            y_max = data_median + 250
                             
                             # Update y-axis limits and ticks
-                            axs[i].set_ylim(
-                                data_min - padding,
-                                data_max + padding
-                            )
-                            # Set reasonable number of ticks (5 ticks)
-                            axs[i].set_yticks(np.linspace(data_min - padding, data_max + padding, 5))
+                            axs[i].set_ylim(y_min, y_max)
+                            # Set ticks with fixed spacing
+                            axs[i].set_yticks(np.arange(y_min, y_max + 1, 125))  # 4 ticks across 500 unit range
                             # Format ticks to show integer values
                             axs[i].yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             elif self.data_source == "EEG":
