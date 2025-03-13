@@ -290,13 +290,16 @@ class LSLViewer():
                         if len(visible_data) > 0:
                             # Calculate median and set fixed range around it
                             data_median = np.median(visible_data)
-                            y_min = data_median - 250  # Fixed 500 unit range centered on median
-                            y_max = data_median + 250
+                            # Use 300 range for first channel, 1000 for others
+                            range_size = 150 if i == 0 else 500  # Half range for min/max calculation
+                            y_min = data_median - range_size
+                            y_max = data_median + range_size
                             
                             # Update y-axis limits and ticks
                             axs[i].set_ylim(y_min, y_max)
-                            # Set ticks with fixed spacing
-                            axs[i].set_yticks(np.arange(y_min, y_max + 1, 125))  # 4 ticks across 500 unit range
+                            # Set ticks with appropriate spacing
+                            tick_spacing = 75 if i == 0 else 250  # Smaller spacing for first channel
+                            axs[i].set_yticks(np.arange(y_min, y_max + 1, tick_spacing))
                             # Format ticks to show integer values
                             axs[i].yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             elif self.data_source == "EEG":
