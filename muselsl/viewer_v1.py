@@ -234,11 +234,8 @@ class LSLViewer():
                 elif self.data_source == "GYRO":
                     axs[i].set_ylim(-250, 250)
                 elif self.data_source == "PPG":
-                    # Calculate y-axis limits based on the average of the signal for each channel
-                    with self.lock:
-                        avg_signal = np.mean(self.data_buffer[i, :])
-                    print(f"Channel {i} average signal: {avg_signal}")
-                    axs[i].set_ylim(avg_signal - 1000, avg_signal + 1000)
+                    # Initialize with reasonable PPG limits that will be dynamically adjusted
+                    axs[i].set_ylim(0, 5000)  # Initial range that will auto-adjust
             
             # Set fixed x-axis limits
             for ax in axs:
@@ -280,8 +277,28 @@ class LSLViewer():
             else:
                 t_normalized = np.array([0])
             
-            # Update line data based on data source
-            if self.data_source == "EEG":
+            # Update line data and dynamically adjust y-axis for PPG
+            if self.data_source == "PPG":
+                # For PPG, dynamically adjust y-axis based on visible data
+                for i, line in enumerate(lines):
+                    if i < d_plot.shape[0]:  # Ensure we don't exceed data dimensions
+                        line.set_data(t_normalized, d_plot[i])
+                        
+                        # Get current visible data
+                        visible_data = d_plot[i][t_normalized >= -self.window]
+                        
+                        if len(visible_data) > 0:
+                            # Calculate new limits with some padding
+                            data_min = np.min(visible_data)
+                            data_max = np.max(visible_data)
+                            padding = (data_max - data_min) * 0.1  # 10% padding
+                            
+                            # Update y-axis limits
+                            axs[i].set_ylim(
+                                data_min - padding,
+                                data_max + padding
+                            )
+            elif self.data_source == "EEG":
                 # Special handling for EEG - stacked channels
                 for ii in range(self.n_chan):
                     if ii < d_plot.shape[0]:
