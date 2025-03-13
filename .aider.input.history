@@ -1456,3 +1456,183 @@
 
 # 2025-03-12 00:19:37.869341
 +/exit
+
+# 2025-03-12 10:31:25.439038
++N
+
+# 2025-03-12 10:31:44.440279
++/exit
+
+# 2025-03-12 10:32:44.860515
++n
+
+# 2025-03-12 10:32:48.866723
++/exit
+
+# 2025-03-12 10:37:53.270347
++/code
+
+# 2025-03-12 11:24:28.854704
++/add muselsl\viewer_v1.py
+
+# 2025-03-12 11:28:29.543434
++UPDATE LSLViewer for setting the y axis of PPG taking into account the first 5 seconds of data
+
+# 2025-03-12 14:27:39.714291
++/undo
+
+# 2025-03-12 14:29:01.163372
++Update `LSLViewer` so that the different subplots for PPG plot have different axis limit (the bottom one should be between -5000 and 5000, and the other two should be between 0 and 700000)
+
+# 2025-03-12 18:07:57.172883
++/model gpt-4o
+
+# 2025-03-12 18:11:37.812122
++UPDATE LSLViewer so that for self.data_source == PPG, the three subpolots have different y axis limits. Let the first one be between 0 and 1000, the second one between 10000 and 110000 and the third one between 120000 and 130000
+
+# 2025-03-12 18:20:48.044552
++UPDATE LSLViewer so that for self.data_source == PPG, the three subpolots have different y axis limits. The axis should be centered around the average of the signal and the limit should be +- 1000
+
+# 2025-03-12 18:26:01.451364
++use a longer buffer to compute the average
+
+# 2025-03-12 18:29:04.779174
++/undo
+
+# 2025-03-12 19:38:25.196314
++/architect
+
+# 2025-03-12 19:39:02.757596
++/code
+
+# 2025-03-12 19:44:00.021257
++Compute the average signal for each channel in the case of PPG and adapt the y axis for each of them
+
+# 2025-03-12 19:44:51.110798
++Output the average signal that you compute for every channel once
+
+# 2025-03-12 19:45:54.997921
++Use 2 seconds of data to compute this average
+
+# 2025-03-12 19:46:47.860555
++/undo
+
+# 2025-03-12 19:47:44.453085
++Use 2 seconds of data to compute this average. Make sure that the average computation works.
+
+# 2025-03-12 19:48:24.778395
++It is not working. I get this Channel 0 average signal: 0.0
++Channel 1 average signal: 0.0
++Channel 2 average signal: 0.0
+
+# 2025-03-12 19:49:51.188382
++Still broken. Please print all the variables that go into the calculation of the average for debugging reasons
+
+# 2025-03-12 19:50:31.104969
++Channel 0 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 0 num_samples: 128
++Channel 0 average signal: 0
++Channel 1 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.    
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 1 num_samples: 128
++Channel 1 average signal: 0
++Channel 2 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.    
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 2 num_samples: 128
++Channel 2 average signal: 0Channel 0 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 0 num_samples: 128
++Channel 0 average signal: 0
++Channel 1 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.    
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 1 num_samples: 128
++Channel 1 average signal: 0
++Channel 2 data slice: [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.    
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
++ 0. 0. 0. 0. 0. 0. 0. 0.]
++Channel 2 num_samples: 128
++Channel 2 average signal: 0
+
+# 2025-03-12 19:51:32.336344
++Error in update_buffer: 'list' object has no attribute 'shape'
+
+# 2025-03-12 19:51:50.018074
++/undo
+
+# 2025-03-12 19:53:16.652711
++Wait 5 seconds before computing the average
+
+# 2025-03-12 19:54:17.830774
++/ask how many samples do you use to compute the average for PPG channels?
+
+# 2025-03-12 19:54:48.735190
++/clear
+
+# 2025-03-12 19:54:55.040248
++/drop
+
+# 2025-03-12 19:55:00.213059
++/add muselsl\viewer_v1.py
+
+# 2025-03-12 19:55:24.252648
++/ask how many samples are used to compute the evearage of PPG channels?
+
+# 2025-03-12 19:56:53.599619
++n
+
+# 2025-03-12 19:57:08.107904
++/model deepseek-coder
+
+# 2025-03-12 19:57:21.947181
++/ask how many samples are used to compute the evearage of PPG channels?
+
+# 2025-03-12 19:57:28.594828
++n
+
+# 2025-03-12 19:57:42.005706
++/model deepseek/deepseek-coder
+
+# 2025-03-12 19:57:47.595345
++/ask how many samples are used to compute the evearage of PPG channels?
+
+# 2025-03-12 20:02:05.982048
++For PPG, adapt the y axis limits dynamically when plotting. (with new data outside of the limits, new limits)
+
+# 2025-03-12 20:04:02.421096
++Well done, but the ticks are actually not being updated. Please fix this
+
+# 2025-03-12 20:07:41.637012
++Actually center the axis on the median rather than on the average. Also be sure that the difference in the y limits is always 500 (from the negative to the positive). That is the amplitude of the signal changes that i am interested in. 
+
+# 2025-03-12 20:09:28.723254
++For the first channel, make the range 300 but for the other two make it 1000
+
+# 2025-03-12 20:12:17.715202
++Actually I want 300 for the third one and 1000 for the other two channels PPG
+
+# 2025-03-12 20:20:09.167300
++/exit

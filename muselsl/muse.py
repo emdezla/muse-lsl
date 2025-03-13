@@ -28,7 +28,7 @@ class Muse():
                  interface=None,
                  time_func=time,
                  name=None,
-                 preset=None,
+                 preset=61,
                  disable_light=False,
                  log_level=logging.ERROR):
         """Initialize
@@ -63,7 +63,7 @@ class Muse():
         self.interface = interface
         self.time_func = time_func
         self.backend = helper.resolve_backend(backend)
-        self.preset = preset
+        self.preset = 61
         self.disable_light = disable_light
 
     def connect(self, interface=None, retries=0):
