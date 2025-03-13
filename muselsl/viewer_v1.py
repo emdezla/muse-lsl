@@ -290,15 +290,15 @@ class LSLViewer():
                         if len(visible_data) > 0:
                             # Calculate median and set fixed range around it
                             data_median = np.median(visible_data)
-                            # Use 300 range for first channel, 1000 for others
-                            range_size = 150 if i == 0 else 500  # Half range for min/max calculation
+                            # Use 1000 range for first two channels, 300 for third
+                            range_size = 500 if i < 2 else 150  # Half range for min/max calculation
                             y_min = data_median - range_size
                             y_max = data_median + range_size
                             
                             # Update y-axis limits and ticks
                             axs[i].set_ylim(y_min, y_max)
                             # Set ticks with appropriate spacing
-                            tick_spacing = 75 if i == 0 else 250  # Smaller spacing for first channel
+                            tick_spacing = 250 if i < 2 else 75  # Larger spacing for first two channels
                             axs[i].set_yticks(np.arange(y_min, y_max + 1, tick_spacing))
                             # Format ticks to show integer values
                             axs[i].yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
